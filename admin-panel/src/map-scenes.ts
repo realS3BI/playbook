@@ -8,13 +8,13 @@ import { createGunzip, gzip } from "node:zlib";
 import { MAP_SCENE_NAME } from "../shared/map-scene.js";
 
 // Bump to re-export every map after changing the export or optimisation settings.
-export const MAP_SCENE_PIPELINE = 2;
+export const MAP_SCENE_PIPELINE = 3;
 const MANIFEST = "manifest.json";
 const SCENE_FILE = /^[a-z0-9_]{1,64}-[0-9a-f]{16}\.(?:glb|webp)$/;
 const STORED_FILE = /^([a-z0-9_]{1,64}-[0-9a-f]{16}\.(?:glb|webp))(?:\.gz)?$/;
 // SteamCMD rewrites map archives in place. Wait until an update has settled.
 const SETTLE_MS = 5 * 60 * 1000;
-const RETRY_MS = 24 * 60 * 60 * 1000;
+const RETRY_MS = 60 * 60 * 1000;
 
 type Source = { size: number; mtimeMs: number };
 type SceneEntry = { scene: string; lightmap: string | null; source: Source; pipeline: number; bytes: number; exportedAt: string };
@@ -61,7 +61,7 @@ async function removeUnusedSceneFiles(directory: string, manifest: SceneManifest
 }
 
 // Exports maps whose archive is new or changed since the last export. A failed export is
-// retried after a day, or as soon as Valve ships a new version of the map.
+// retried after an hour, or as soon as Valve ships a new version of the map.
 export async function refreshMapScenes({ maps, gameDir, directory, build, now = Date.now(), log = console.log, signal = undefined as AbortSignal | undefined }) {
   await mkdir(directory, { recursive: true });
   const manifest = await readSceneManifest(directory);

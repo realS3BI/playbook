@@ -47,7 +47,7 @@ window.checkPages=async()=>{
  [...document.querySelectorAll('button')].find(button=>button.textContent.includes('Nächstes Lineup')).click();
  await waitFor(()=>location.pathname.includes('Abc1235')&&document.querySelector('h1')?.textContent==='Treppe');
  assert(new URLSearchParams(location.search).get('map')==='mirage','Mapfilter beim Wechsel verloren');
- [...document.querySelectorAll('a')].find(link=>link.textContent.includes('Zur Detailseite')).click();await waitFor(()=>location.pathname.endsWith('Abc1235')&&!document.querySelector('.review-stepper')&&document.querySelector('h1')?.textContent==='Treppe');
+ [...document.querySelectorAll('a')].find(link=>link.textContent.includes('Zur Detailseite')).click();await waitFor(()=>location.pathname.endsWith('Abc1235')&&!document.querySelector('.review-stepper')&&document.querySelector('h1')?.textContent==='Mirage · Smoke: Treppe');
  assert(!document.querySelector('.review-stepper'),'Stepper weiterhin in der Detailseite');
  assert([...document.querySelectorAll('button')].some(button=>button.textContent==='Review öffnen'),'Review-Button fehlt');
  assert(document.documentElement.scrollWidth<=innerWidth,'Horizontaler Überlauf');

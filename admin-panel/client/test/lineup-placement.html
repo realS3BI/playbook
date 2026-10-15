@@ -48,7 +48,9 @@ window.checkLiveLineup=async()=>{
  assert(window.liveEvents.url==='/api/nades/events','Live-Verbindung fehlt');
  window.publishEntries(entries.map(entry=>({...entry,displayName:'CT Spawn Stairs Dropper Smoke',lineupPos:'-400 2192 32',landingPos:'-100 1200 96',lineupAng:'80 90 0',flightDuration:3.125,is_jumpthrow:true,click_type:'left',official:false,throwFromTitle:'CT-Spawn',throwToTitle:'Stairs',updatedAt:'3'})));
  await waitFor(()=>document.body.innerText.includes('3,13 s')&&document.querySelector('#lineup-field-throwFromTitle'));
- assert(document.querySelector('h1').textContent==='CT Spawn Stairs Dropper Smoke','Detailname nicht live aktualisiert');
+ assert(document.querySelector('h1').textContent==='Mirage · Smoke: CT Spawn Stairs Dropper Smoke','Detailname nicht live aktualisiert');
+ assert([...document.querySelectorAll('.official-photo-picker button')].map(item=>item.textContent).join(',')==='Abwurfsicht','Entwurf nutzt nicht die gemeinsame Detailansicht');
+ document.querySelector('.official-lineup-management').open=true;
  assert(!document.querySelector('#lineup-flight-duration')&&!document.querySelector('#lineup-field-lineupPos')&&!document.querySelector('#lineup-field-displayName'),'Feste Daten bearbeitbar');
  const field=document.querySelector('#lineup-field-throwFromTitle');
  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field,'Eigene Eingabe');field.dispatchEvent(new Event('input',{bubbles:true}));

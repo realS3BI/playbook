@@ -93,7 +93,7 @@ test("scenes are exported once per map version and replaced files are removed", 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("a failed export keeps the previous scene and waits for a day or a new map version", async () => {
+test("a failed export keeps the previous scene and waits an hour or for a new map version", async () => {
   const { root, gameDir, directory, archive } = await sceneFixture();
   try {
     await archive("de_nuke", "version 1");
@@ -110,7 +110,7 @@ test("a failed export keeps the previous scene and waits for a day or a new map 
     assert.match(manifest.failures.de_nuke.error, /viewer crashed/);
     await refreshMapScenes(options);
     assert.equal(attempts, 2, "the same failing version is not retried immediately");
-    await refreshMapScenes({ ...options, now: Date.now() + 25 * 60 * 60 * 1000 });
+    await refreshMapScenes({ ...options, now: Date.now() + 61 * 60 * 1000 });
     assert.equal(attempts, 3);
     fail = false;
     await archive("de_nuke", "version 3 fixed it");

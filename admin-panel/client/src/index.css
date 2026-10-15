@@ -1189,7 +1189,6 @@ button:not(:disabled),
 .lineup-radar { min-width: 0; position: sticky; top: 5rem; }
 .lineup-radar .radar-map svg { max-height: calc(100dvh - 15rem); width: 100%; }
 .lineup-sidebar { display: grid; gap: 1.5rem; min-width: 0; }
-.lineup-view-tabs { gap: 0.75rem; }
 .lineup-pov { display: grid; gap: 0.75rem; min-width: 0; }
 .lineup-pov-stage { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line-default); border-radius: var(--radius-lg); background: var(--surface-0); }
 .lineup-pov-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -1197,10 +1196,23 @@ button:not(:disabled),
 .lineup-pov-canvas:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
 .lineup-pov-status { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 0.65rem; padding: 1.5rem; color: var(--text-secondary); font-size: var(--type-sm); text-align: center; }
 .lineup-pov-crosshair { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
-.lineup-pov-crosshair svg { position: absolute; top: -12px; left: -12px; width: 24px; height: 24px; overflow: visible; }
-.lineup-pov-crosshair path { fill: none; stroke-linecap: square; }
+.lineup-pov-crosshair svg { position: absolute; top: 0; left: 0; overflow: visible; }
+/* Crosshair choice floats over the top right of the reconstruction, like the photo tools. */
+.crosshair-switch { position: absolute; top: 0.75rem; right: 0.75rem; display: flex; overflow: hidden; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); background: rgb(7 12 16 / 78%); backdrop-filter: blur(6px); }
+.crosshair-switch button { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.25rem; padding-inline: 0.7rem; color: var(--text-secondary); font-size: var(--type-xs); font-weight: 600; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.crosshair-switch button + button { border-left: 1px solid rgb(255 255 255 / 10%); }
+.crosshair-switch button:hover { background: rgb(255 255 255 / 8%); color: var(--text-strong); }
+.crosshair-switch button[aria-pressed="true"] { background: var(--muted-foreground); color: var(--background); }
+.crosshair-switch button:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
+.crosshair-switch svg { width: 1rem; height: 1rem; flex: none; }
+@container media-stage (max-width: 40rem) { .crosshair-switch span { display: none; } }
+@media (prefers-reduced-motion: reduce) { .crosshair-switch button { transition: none; } }
+/* Lineup help: lines through the aim point with a labelled tick every 10°, over the reconstruction and the aim photo. */
+.lineup-guide { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.lineup-guide-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lineup-guide-labels text { fill: rgb(255 255 255 / 92%); stroke: rgb(0 0 0 / 30%); paint-order: stroke; font-weight: 500; }
 .lineup-pov-caption { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
-/* In the official media stage the reconstruction fills the 16:9 frame; the note floats over the image. */
+/* In the media stage the reconstruction fills the 16:9 frame; the note floats over the image. */
 .official-media-stage .lineup-pov, .official-media-stage .lineup-pov-stage { height: 100%; }
 .official-media-stage .lineup-pov-stage { border: 0; border-radius: 0; }
 .official-media-stage .lineup-pov-caption { position: absolute; right: 0.75rem; bottom: 0.75rem; left: 0.75rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); padding: 0.4rem 0.4rem 0.4rem 0.75rem; background: rgb(7 12 16 / 78%); backdrop-filter: blur(6px); }
@@ -1210,7 +1222,7 @@ button:not(:disabled),
 .lineup-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr)); gap: 1.5rem; }
 .lineup-images img { width: 100%; border-radius: 0.5rem; }
 .lineup-images figcaption { margin-top: 0.5rem; font-size: var(--type-sm); color: var(--muted-foreground); }
-/* Reviewed lineups use a large media stage with a compact instruction rail. */
+/* Saved lineups use a large media stage with a compact instruction rail; drafts only offer the Abwurfsicht. */
 .control-main:has(.official-lineup-detail) { max-width: none; }
 .official-lineup-detail { gap: 1.25rem; }
 .official-lineup-heading { display: flex; align-items: center; gap: 0.5rem; }
@@ -1221,7 +1233,7 @@ button:not(:disabled),
 .official-lineup-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr) 19rem; align-items: start; gap: 1.5rem; }
 .official-lineup-main, .official-lineup-sidebar { min-width: 0; display: grid; gap: 1rem; }
 .official-lineup-sidebar { gap: 1.5rem; }
-.official-media-stage { position: relative; aspect-ratio: 16 / 9; background: black; overflow: hidden; }
+.official-media-stage { position: relative; aspect-ratio: 16 / 9; background: black; overflow: hidden; container: media-stage / inline-size; }
 .lineup-hero-video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .lineup-hero-video[hidden] { display: none; }
 .lineup-video-toggle { position: absolute; inset: 0; display: grid; place-items: center; width: 100%; height: 100%; cursor: pointer; background: transparent; }
@@ -1233,7 +1245,7 @@ button:not(:disabled),
 .official-photo-viewport { overflow: hidden; }
 .official-photo-viewport img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; }
 .official-lineup-photo figcaption { position: absolute; left: 50%; bottom: 1.5rem; transform: translateX(-50%); max-width: calc(100% - 2rem); padding: 0.25rem 0.65rem; background: #000b; color: white; font-size: var(--type-base); font-weight: 500; text-align: center; }
-.official-photo-zoom { position: absolute; right: 0.75rem; top: 0.75rem; }
+.official-photo-tools { position: absolute; right: 0.75rem; top: 0.75rem; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
 .official-lineup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .official-lineup-actions > button:first-child { background: var(--secondary); }
 .official-throw-facts { display: grid; gap: 1.35rem; padding-block: 1.25rem; border-block: 1px solid var(--border); }
@@ -1276,11 +1288,11 @@ button:not(:disabled),
   .official-photo-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .official-lineup-sidebar { grid-column: 1; }
   .official-photo-picker span { font-size: var(--type-2xs); padding: 0.35rem; }
-  .official-photo-zoom { top: 0.35rem; right: 0.35rem; }
+  .official-photo-tools, .crosshair-switch { top: 0.35rem; right: 0.35rem; }
   .official-lineup-photo figcaption { bottom: 0.5rem; font-size: var(--type-xs); }
 }
 .crosshair-dialog { width: min(1100px, calc(100vw - 24px)); }
-.crosshair-viewport { aspect-ratio: 16 / 9; max-height: 60dvh; overflow: hidden; background: black; }
+.crosshair-viewport { position: relative; aspect-ratio: 16 / 9; max-height: 60dvh; overflow: hidden; background: black; }
 .crosshair-viewport img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; }
 .radar-preview { position: fixed; z-index: 40; width: min(396px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow-y: auto; display: grid; gap: 0.35rem; padding: 0.35rem; border: 1px solid var(--border); border-radius: 0.35rem; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 12px 32px #0006; }
 .radar-preview-media { display: block; position: relative; cursor: pointer; }

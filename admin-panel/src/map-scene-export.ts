@@ -13,7 +13,13 @@ function runViewer(executable: string, args: string[], signal?: AbortSignal) {
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
     child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve() : reject(new Error(`Source 2 Viewer endete mit Code ${code}: ${tail.trim().split("\n").slice(-6).join(" | ")}`)));
+    child.on("close", code => {
+      if (code === 0) return resolve();
+      // The exception message precedes the stack trace; keep it ahead of the last frames.
+      const lines = tail.trim().split("\n").map(line => line.trim()).filter(Boolean);
+      const cause = lines.find(line => /exception/i.test(line) && !line.startsWith("at "));
+      reject(new Error(`Source 2 Viewer endete mit Code ${code}: ${[...new Set([cause, ...lines.slice(-3)].filter(Boolean))].join(" | ")}`));
+    });
   });
 }
 

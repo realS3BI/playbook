@@ -104,6 +104,8 @@ services:
     tmpfs:
       - /tmp:size=256m
     cap_drop: [ALL]
+    # The CS2 bootstrap rewrites gameinfo.gi with mode 600; read it without other privileges.
+    cap_add: [DAC_READ_SEARCH]
     security_opt: [no-new-privileges:true]
 
 volumes:
