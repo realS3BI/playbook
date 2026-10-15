@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mapSceneSourcePath, type SceneBuild } from "./map-scenes.js";
 
 // Maps with many textures take well over 15 minutes on two CPUs.
-const EXPORT_TIMEOUT_MS = 45 * 60 * 1000;
+const EXPORT_TIMEOUT_MS = 30 * 60 * 1000;
 
 function runViewer(executable: string, args: string[], signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

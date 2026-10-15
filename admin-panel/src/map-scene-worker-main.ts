@@ -2,7 +2,7 @@ import { MongoClient } from "mongodb";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
-import { refreshMapScenes } from "./map-scenes.js";
+import { refreshMapScenes, SCENE_HEARTBEAT_MS, sceneActivity } from "./map-scenes.js";
 import { buildMapScene } from "./map-scene-export.js";
 import { ACTIVE_DUTY_MAPS } from "../shared/maps.js";
 
@@ -27,20 +27,30 @@ async function sceneMaps(db) {
     .sort((a, b) => (lineups.get(b) || 0) - (lineups.get(a) || 0) || a.localeCompare(b));
 }
 
+const activity = sceneActivity(directory, interval / 1000);
+const heartbeat = setInterval(() => void activity.save(), SCENE_HEARTBEAT_MS);
 try {
   await client.connect();
   const db = client.db(process.env.MAP_SCENE_DATABASE || "cs2_admin_panel");
   await rm(workRoot, { recursive: true, force: true });
-  console.log(`Abwurfsichten: prüfe ${gameDir} alle ${interval / 1000} s.`);
+  activity.log(`Abwurfsichten: prüfe ${gameDir} alle ${interval / 1000} s.`);
   while (!abort.signal.aborted) {
+    activity.status.nextCheckAt = null;
     try {
-      await refreshMapScenes({ maps: await sceneMaps(db), gameDir, directory, signal: abort.signal,
+      activity.status.maps = await sceneMaps(db);
+      await refreshMapScenes({ maps: activity.status.maps, gameDir, directory, signal: abort.signal, log: activity.log, onExport: activity.exporting,
         build: map => buildMapScene({ viewer, gameDir, map, workRoot, signal: abort.signal }) });
     } catch (error) {
-      if (!abort.signal.aborted) console.error("Abwurfsichten vorübergehend nicht verfügbar:", error.message);
+      if (!abort.signal.aborted) activity.log(`Abwurfsichten vorübergehend nicht verfügbar: ${error.message}`);
     }
+    activity.status.nextCheckAt = new Date(Date.now() + interval).toISOString();
+    await activity.save();
     await wait(interval, undefined, { signal: abort.signal }).catch(() => {});
   }
 } finally {
+  clearInterval(heartbeat);
+  activity.status.current = activity.status.nextCheckAt = null;
+  activity.log("Abwurfsichten: Dienst beendet.");
+  await activity.save();
   await client.close();
 }

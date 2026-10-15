@@ -28,6 +28,7 @@ const routes: Record<string, Action> = {
   "POST /nades/import": "lineups.moderate",
   "GET /nades/export": "lineups.moderate",
   "POST /uploads/lineup-image": "lineups.create",
+  "GET /admin/map-scenes": "lineups.moderate",
 };
 export function routeAllowed(user: Actor, method: string, path: string) {
   let action = routes[`${method} ${path}`];

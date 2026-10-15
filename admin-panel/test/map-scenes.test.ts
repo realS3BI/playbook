@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import express from "express";
 import { lineupCamera, sourceToScene, VERTICAL_FOV_DEGREES } from "../shared/map-scene.js";
-import { installMapScenes, MAP_SCENE_PIPELINE, readSceneManifest, refreshMapScenes } from "../src/map-scenes.js";
+import { describeMapScenes, installMapScenes, MAP_SCENE_PIPELINE, readSceneManifest, refreshMapScenes, sceneActivity } from "../src/map-scenes.js";
 import { hiddenSceneMaterial, lightmapCoordinates } from "../src/map-scene-export.js";
 import { createApp } from "../src/app.js";
 
@@ -173,5 +173,58 @@ test("every website role may load scenes, anonymous requests are rejected", asyn
     assert.equal((await fetch(url)).status, 401);
     for (role of ["player", "training_player", "match_admin", "admin"])
       assert.equal((await fetch(url, { headers: { Cookie: `cs2_panel_session=${"a".repeat(43)}` } })).status, 404, role);
+  } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+test("platform admins see per map whether a scene is ready, failed, exporting or waiting", async () => {
+  const { root, gameDir, directory, archive } = await sceneFixture();
+  try {
+    await archive("de_mirage", "archive");
+    await archive("de_nuke", "archive");
+    const activity = sceneActivity(directory, 600, () => {});
+    activity.status.maps = ["de_mirage", "de_nuke", "de_inferno", "de_ancient"];
+    const exporting: (string | null)[] = [];
+    await refreshMapScenes({ maps: ["de_mirage", "de_nuke"], gameDir, directory, log: activity.log, onExport: map => { exporting.push(map); activity.exporting(map); },
+      build: async map => { if (map === "de_nuke") throw new Error("Source 2 Viewer nach 30 Minuten abgebrochen"); return { scene: Buffer.from("glb"), lightmap: null }; } });
+    assert.deepEqual(exporting, ["de_mirage", null, "de_nuke", null]);
+    activity.exporting("de_inferno");
+    await activity.save();
+    const status = await describeMapScenes(directory);
+    assert.equal(status.worker?.alive, true);
+    assert.equal(status.worker?.current?.map, "de_inferno");
+    const byMap = Object.fromEntries(status.maps.map(entry => [entry.map, entry]));
+    assert.equal(byMap.de_mirage.state, "ready");
+    assert.equal(byMap.de_nuke.state, "failed");
+    assert.match(byMap.de_nuke.error!, /30 Minuten/);
+    assert.equal(Date.parse(byMap.de_nuke.retryAt!) - Date.parse(byMap.de_nuke.failedAt!), 60 * 60 * 1000);
+    assert.equal(byMap.de_inferno.state, "exporting");
+    assert.equal(byMap.de_ancient.state, "waiting");
+    assert.deepEqual(status.log.map(line => line.message).slice(-1), ["Abwurfsicht für de_nuke fehlgeschlagen: Source 2 Viewer nach 30 Minuten abgebrochen"]);
+
+    const stale = await describeMapScenes(directory, Date.now() + 5 * 60 * 1000);
+    assert.equal(stale.worker?.alive, false);
+    assert.equal(stale.maps.find(entry => entry.map === "de_inferno")!.state, "waiting", "a silent worker is not exporting anything");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("only platform admins read the export status", async () => {
+  let role = "match_admin";
+  const app = createApp({ config: { sessionSecret: "scene-test-secret", uploadDir: join(tmpdir(), "missing-uploads") }, compose: {}, nadesSync: null,
+    store: {
+      getSession: async () => ({ purpose: "user", steamId: "76561198000000001" }),
+      getUser: async () => ({ identitySteam64: "76561198000000001", role }),
+      getNades: async () => [],
+    },
+  });
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => server.once("listening", resolve));
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/admin/map-scenes`;
+  const headers = { Cookie: `cs2_panel_session=${"a".repeat(43)}` };
+  try {
+    assert.equal((await fetch(url, { headers })).status, 403);
+    role = "admin";
+    const response = await fetch(url, { headers });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { worker: null, maps: [], log: [] });
   } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });

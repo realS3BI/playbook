@@ -10,6 +10,10 @@ import { MAP_SCENE_NAME } from "../shared/map-scene.js";
 // Bump to re-export every map after changing the export or optimisation settings.
 export const MAP_SCENE_PIPELINE = 3;
 const MANIFEST = "manifest.json";
+const STATUS = "status.json";
+const LOG_LINES = 300;
+// The worker refreshes its status at least this often, also during a long export.
+export const SCENE_HEARTBEAT_MS = 30 * 1000;
 const SCENE_FILE = /^[a-z0-9_]{1,64}-[0-9a-f]{16}\.(?:glb|webp)$/;
 const STORED_FILE = /^([a-z0-9_]{1,64}-[0-9a-f]{16}\.(?:glb|webp))(?:\.gz)?$/;
 // SteamCMD rewrites map archives in place. Wait until an update has settled.
@@ -21,6 +25,10 @@ type SceneEntry = { scene: string; lightmap: string | null; source: Source; pipe
 type Failure = { source: Source; pipeline: number; error: string; at: string };
 export type SceneManifest = { maps: Record<string, SceneEntry>; failures: Record<string, Failure> };
 export type SceneBuild = { scene: Uint8Array; lightmap: Uint8Array | null };
+export type SceneStatus = {
+  startedAt: string; updatedAt: string; intervalSeconds: number; maps: string[];
+  current: { map: string; startedAt: string } | null; nextCheckAt: string | null; log: { at: string; message: string }[];
+};
 
 export async function readSceneManifest(directory: string): Promise<SceneManifest> {
   try {
@@ -32,10 +40,66 @@ export async function readSceneManifest(directory: string): Promise<SceneManifes
   }
 }
 
-async function writeSceneManifest(directory: string, manifest: SceneManifest) {
-  const temp = join(directory, `${MANIFEST}.${process.pid}.tmp`);
-  await writeFile(temp, JSON.stringify(manifest, null, 2));
-  await rename(temp, join(directory, MANIFEST));
+async function writeJson(directory: string, name: string, value: unknown) {
+  const temp = join(directory, `${name}.${process.pid}.tmp`);
+  await writeFile(temp, JSON.stringify(value, null, 2));
+  await rename(temp, join(directory, name));
+}
+
+async function readSceneStatus(directory: string): Promise<SceneStatus | null> {
+  try { return JSON.parse(await readFile(join(directory, STATUS), "utf8")); }
+  catch (error) {
+    if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}
+
+// The worker runs in its own container; status.json tells the panel what it is doing.
+export function sceneActivity(directory: string, intervalSeconds: number, print: (message: string) => void = console.log) {
+  const startedAt = new Date().toISOString();
+  const status: SceneStatus = { startedAt, updatedAt: startedAt, intervalSeconds, maps: [], current: null, nextCheckAt: null, log: [] };
+  let writing = Promise.resolve();
+  const save = () => {
+    status.updatedAt = new Date().toISOString();
+    const snapshot = structuredClone(status);
+    writing = writing.then(() => mkdir(directory, { recursive: true })).then(() => writeJson(directory, STATUS, snapshot))
+      .catch(error => print(`Status der Abwurfsichten nicht gespeichert: ${error.message}`));
+    return writing;
+  };
+  return {
+    status, save,
+    log(message: string) {
+      print(message);
+      status.log.push({ at: new Date().toISOString(), message });
+      status.log.splice(0, status.log.length - LOG_LINES);
+      void save();
+    },
+    exporting(map: string | null) {
+      status.current = map ? { map, startedAt: new Date().toISOString() } : null;
+      void save();
+    },
+  };
+}
+
+// Per-map state for platform admins: ready, failed (with the next attempt), exporting or waiting.
+export async function describeMapScenes(directory: string, now = Date.now()) {
+  const [manifest, status] = await Promise.all([readSceneManifest(directory), readSceneStatus(directory)]);
+  const alive = !!status && now - Date.parse(status.updatedAt) < 4 * SCENE_HEARTBEAT_MS;
+  const current = alive ? status!.current : null;
+  const maps = [...new Set([...(status?.maps || []), ...Object.keys(manifest.maps), ...Object.keys(manifest.failures)])];
+  return {
+    worker: status && { alive, startedAt: status.startedAt, updatedAt: status.updatedAt, intervalSeconds: status.intervalSeconds, current, nextCheckAt: alive ? status.nextCheckAt : null },
+    maps: maps.map(map => {
+      const scene = manifest.maps[map], failure = manifest.failures[map]?.pipeline === MAP_SCENE_PIPELINE ? manifest.failures[map] : undefined;
+      const state = current?.map === map ? "exporting" : failure ? "failed" : scene?.pipeline === MAP_SCENE_PIPELINE ? "ready" : "waiting";
+      return {
+        map, state, available: !!scene, bytes: scene?.bytes ?? null, exportedAt: scene?.exportedAt ?? null,
+        error: failure?.error ?? null, failedAt: failure?.at ?? null,
+        retryAt: failure ? new Date(Date.parse(failure.at) + RETRY_MS).toISOString() : null,
+      };
+    }),
+    log: status?.log || [],
+  };
 }
 
 export function mapSceneSourcePath(gameDir: string, map: string) {
@@ -62,8 +126,10 @@ async function removeUnusedSceneFiles(directory: string, manifest: SceneManifest
 
 // Exports maps whose archive is new or changed since the last export, in the given order. A failed
 // export is retried after an hour, or as soon as Valve ships a new version of the map.
-export async function refreshMapScenes({ maps, gameDir, directory, build, now = Date.now(), log = console.log, signal = undefined as AbortSignal | undefined }) {
+export async function refreshMapScenes({ maps, gameDir, directory, build, now = Date.now(), log = console.log, signal = undefined as AbortSignal | undefined,
+  onExport = (_map: string | null) => {} }) {
   await mkdir(directory, { recursive: true });
+  const passStarted = Date.now(), at = () => new Date(now + Date.now() - passStarted).toISOString();
   const manifest = await readSceneManifest(directory);
   const sameSource = (a: Source | undefined, b: Source) => a?.size === b.size && a?.mtimeMs === b.mtimeMs;
   let exported = 0;
@@ -84,26 +150,28 @@ export async function refreshMapScenes({ maps, gameDir, directory, build, now = 
     const started = Date.now();
     try {
       log(`Abwurfsicht für ${map} wird exportiert ...`);
+      onExport(map);
       const result: SceneBuild = await build(map);
       const scene = await storeSceneFile(directory, map, "glb", result.scene, true);
       const lightmap = result.lightmap ? await storeSceneFile(directory, map, "webp", result.lightmap) : null;
       manifest.maps[map] = { scene, lightmap, source, pipeline: MAP_SCENE_PIPELINE,
-        bytes: result.scene.byteLength + (result.lightmap?.byteLength || 0), exportedAt: new Date(now).toISOString() };
+        bytes: result.scene.byteLength + (result.lightmap?.byteLength || 0), exportedAt: at() };
       delete manifest.failures[map];
       exported++;
       log(`Abwurfsicht für ${map} bereit: ${(manifest.maps[map].bytes / 1048576).toFixed(1)} MB in ${Math.round((Date.now() - started) / 1000)} s.`);
     } catch (error) {
       if (signal?.aborted) break;
-      manifest.failures[map] = { source, pipeline: MAP_SCENE_PIPELINE, error: String(error.message || error).slice(0, 2000), at: new Date(now).toISOString() };
+      manifest.failures[map] = { source, pipeline: MAP_SCENE_PIPELINE, error: String(error.message || error).slice(0, 2000), at: at() };
       log(`Abwurfsicht für ${map} fehlgeschlagen: ${manifest.failures[map].error}`);
-    }
-    await writeSceneManifest(directory, manifest);
+    } finally { onExport(null); }
+    await writeJson(directory, MANIFEST, manifest);
     await removeUnusedSceneFiles(directory, manifest);
   }
   return exported;
 }
 
 export function installMapScenes(app, { directory }: { directory: string }) {
+  app.locals.live?.get(app, "/api/admin/map-scenes", () => describeMapScenes(directory), 5000, true);
   app.get("/api/map-scenes/:map", async (req, res, next) => {
     try {
       const map = String(req.params.map || "");

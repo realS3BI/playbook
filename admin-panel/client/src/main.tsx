@@ -9,6 +9,7 @@ import { LiveSessionsPage, LiveSessionPage } from "./components/live-session-pag
 import { MatchImportsPage, PrematchesPage, PrematchPage } from "./components/match-preparation-pages";
 import { StratsPage, StratPage, StratEditor, LiveStratSettingsPage } from "./components/strats-page";
 import { RolesPage } from "./components/roles-page";
+import { MapScenesPage } from "./components/map-scenes-page";
 import { NadesMenuStatus } from "./components/nades-menu-status";
 import { AppSidebar } from "./components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
@@ -31,6 +32,7 @@ import { createBrowserRouter, RouterProvider, Navigate, NavLink, Route, Routes, 
 import {
   Activity,
   BookOpen,
+  Box,
   ClipboardCheck,
   Check,
   ChevronRight,
@@ -131,6 +133,7 @@ const tabs = [
   { id: "console", path: routePaths.console, label: "Konsole", icon: Terminal, group: "Server" },
   { id: "reviews", path: routePaths.reviews, label: "Reviews", icon: ClipboardCheck, group: "Verwaltung" },
   { id: "access", path: routePaths.access, label: "Benutzer", icon: Shield, group: "Verwaltung" },
+  { id: "map-scenes", path: "/admin/map-scenes", label: "Abwurfsichten", icon: Box, group: "Verwaltung" },
   { id: "links", path: routePaths.links, label: "Dokumentation", icon: BookOpen, group: "Hilfe" }
 ];
 
@@ -140,7 +143,7 @@ function isMapRoute(pathname) {
 }
 function allowedTabs(user) { return tabs.filter(tab => {
   if (["Training", "Teams", "Strats", "Analyse", "Hilfe"].includes(tab.group)) return true;
-  const action = tab.id === "reviews" ? "lineups.moderate" : ["access", "roles"].includes(tab.id) ? "users.manage" : tab.id === "console" ? "server.rcon" : ["overview", "game"].includes(tab.id) ? "server.match" : "server.manage";
+  const action = ["reviews", "map-scenes"].includes(tab.id) ? "lineups.moderate" : ["access", "roles"].includes(tab.id) ? "users.manage" : tab.id === "console" ? "server.rcon" : ["overview", "game"].includes(tab.id) ? "server.match" : "server.manage";
   return authorize(user, action);
 }); }
 const isWorkspaceRoute = (path: string) => /^\/(teams|strats|analysis)(\/|$)/.test(path);
@@ -252,7 +255,7 @@ function Shell({ user, children, tab, onLogout, dirty, busy, onSave, onApply, op
           </header>}
         <div id="main-content" className={immersive ? "live-content min-w-0" : "control-content control-main min-w-0"} tabIndex={-1}>
           {!immersive && <LiveRecordingStatus userId={user.identitySteam64} />}
-          {["Server", "Verwaltung"].includes(activeTab.group) && <WorkspaceNavigation label={`${activeTab.group}-Navigation`} items={allowedTabs(user).filter(item => item.group === activeTab.group).sort((a, b) => activeTab.group === "Verwaltung" ? ["access", "roles", "reviews"].indexOf(a.id) - ["access", "roles", "reviews"].indexOf(b.id) : 0).map(item => ({ label: item.label, path: item.path }))} actions={serverActions} />}
+          {["Server", "Verwaltung"].includes(activeTab.group) && <WorkspaceNavigation label={`${activeTab.group}-Navigation`} items={allowedTabs(user).filter(item => item.group === activeTab.group).sort((a, b) => activeTab.group === "Verwaltung" ? ["access", "roles", "reviews", "map-scenes"].indexOf(a.id) - ["access", "roles", "reviews", "map-scenes"].indexOf(b.id) : 0).map(item => ({ label: item.label, path: item.path }))} actions={serverActions} />}
           <NadeFavoritesProvider key={user.identitySteam64}>{children}</NadeFavoritesProvider>
         </div>
         </SidebarInset>
@@ -972,6 +975,7 @@ function App() {
         <Route path="/strats/live/:teamId" element={<LiveStratsPage user={user} nades={nades} maps={libraryMaps} />} />
         <Route path="/strats/:stratId" element={<StratPage user={user} nades={nades} maps={libraryMaps} />} />
         <Route path="/admin/roles" element={<RolesPage />} />
+        <Route path="/admin/map-scenes" element={<MapScenesPage />} />
         <Route path="/access" element={<Navigate to="/admin/users" replace />} />
         <Route path="/" element={<Navigate to={roleHome} replace />} />
         <Route

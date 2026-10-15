@@ -175,8 +175,8 @@ export function AppSidebar({
       items: [...adminItems]
         .sort(
           (a, b) =>
-            ["/admin/users", "/admin/roles", "/server/reviews"].indexOf(a.path) -
-            ["/admin/users", "/admin/roles", "/server/reviews"].indexOf(b.path),
+            ["/admin/users", "/admin/roles", "/server/reviews", "/admin/map-scenes"].indexOf(a.path) -
+            ["/admin/users", "/admin/roles", "/server/reviews", "/admin/map-scenes"].indexOf(b.path),
         )
         .map((item) => ({
           title: item.label,
