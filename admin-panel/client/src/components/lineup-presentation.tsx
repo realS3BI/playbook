@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, ArrowUp, ChevronsDown, ChevronsRight, CirclePause, Copy, Crosshair, Film, Footprints, Link2, MapPin, MoveRight, PersonStanding, Play, ScanFace, Target, Timer, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowLeft, ArrowUp, Box, ChevronsDown, ChevronsRight, CirclePause, Copy, Crosshair, Film, Footprints, Link2, MapPin, MoveRight, PersonStanding, Play, ScanFace, Target, Timer, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Badge } from "./ui/badge";
@@ -70,11 +70,14 @@ export function ThrowFacts({ nade }) {
   return <dl className="official-throw-facts" aria-label="Wurfattribute">{facts.map(({ Icon, label, value }) => <div key={label}><dt>{label}</dt><dd>{Icon && <Icon aria-hidden="true" />}{value}</dd></div>)}</dl>;
 }
 
+const LineupPov = lazy(() => import("./lineup-pov"));
+
 export function OfficialLineupDetail({ nade, map, back, onBack, management, children }) {
   const [selectedSlot, setSelectedSlot] = useState(() => ["video", "aim", "position", "effect", "front"].find(slot => nade.reviewMedia?.[slot]) || "video");
   const [zoomOpen, setZoomOpen] = useState(false);
   const heldSlot = useHeldReviewSlot();
-  const shortcutSlot = !zoomOpen && heldSlot && nade.reviewMedia?.[heldSlot] ? heldSlot : null;
+  // In the Abwurfsicht, Shift zooms the reconstruction instead of switching to the aim photo.
+  const shortcutSlot = !zoomOpen && heldSlot && !(selectedSlot === "pov" && heldSlot === "aim") && nade.reviewMedia?.[heldSlot] ? heldSlot : null;
   const activeSlot = shortcutSlot || selectedSlot;
   const media = [
     { slot: "video", title: "Video", Icon: Film, shortcut: [] },
@@ -82,6 +85,7 @@ export function OfficialLineupDetail({ nade, map, back, onBack, management, chil
     { slot: "position", title: "Standposition", Icon: MapPin, shortcut: ["Alt"] },
     { slot: "effect", title: "Wirkung am Ziel", Icon: Target, shortcut: ["Shift", "Alt"] },
     { slot: "front", title: "Vorderansicht", Icon: ScanFace, shortcut: [] },
+    { slot: "pov", title: "Abwurfsicht", Icon: Box, shortcut: [] },
   ];
   const selectedPhoto = media.find(item => item.slot === activeSlot);
   return <article className="playbook-page lineup-page official-lineup-detail">
@@ -100,7 +104,8 @@ export function OfficialLineupDetail({ nade, map, back, onBack, management, chil
         <div className="official-media-stage">
           {nade.reviewMedia?.video && <LineupVideo key={nade.reviewMedia.video.url} src={nade.reviewMedia.video.url} poster={nade.reviewMedia?.aim?.url} active={activeSlot === "video"} keyboardEnabled={!zoomOpen} title={nade.displayName || nade.name} />}
           {activeSlot === "video" && !nade.reviewMedia?.video && <p className="official-media-empty">Für dieses Lineup ist noch kein Video vorhanden.</p>}
-          {activeSlot !== "video" && (nade.reviewMedia?.[activeSlot] && selectedPhoto ? <figure className="official-lineup-photo">
+          {activeSlot === "pov" && <Suspense fallback={<div className="lineup-pov-stage" aria-busy="true" />}><LineupPov nade={nade} mapName={map.mapName || nade.map} mapLabel={map.name} /></Suspense>}
+          {activeSlot !== "video" && activeSlot !== "pov" && (nade.reviewMedia?.[activeSlot] && selectedPhoto ? <figure className="official-lineup-photo">
             <div className="official-photo-viewport"><img src={nade.reviewMedia[selectedPhoto.slot].url} alt={`${selectedPhoto.title}: ${nade.displayName || nade.name}`} style={{ transform: shortcutSlot === "aim" ? "scale(3)" : undefined }} /></div>
             <figcaption>{selectedPhoto.title}{shortcutSlot === "aim" && " · Fadenkreuz-Zoom"}</figcaption>
             {selectedPhoto.slot === "aim" && <Button className="official-photo-zoom" variant="secondary" size="sm" onClick={() => setZoomOpen(true)}><ZoomIn />Fadenkreuz-Zoom</Button>}

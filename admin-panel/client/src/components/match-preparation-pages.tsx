@@ -478,10 +478,21 @@ export function MatchImportsPage({ user }: Props) {
                             onChange={(e) => setAuthCode(e.target.value)}
                           />
                           <FieldDescription>
-                            Die Matchhistory-Freigabe aus deinem Steam-Konto.
-                            Kein Steam-Passwort.
+                            Öffne die History-Freigabe bei Steam und melde dich
+                            an. Erstelle oder kopiere dort deinen Game
+                            Authentication Code und füge ihn hier ein.
+                            Das ist kein Steam-Passwort.
                           </FieldDescription>
                         </Field>
+                        <Button asChild variant="outline" size="sm">
+                          <a
+                            href="https://steamcommunity.com/my/gcpd/730/?tab=authcodes"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Authentication Code bei Steam holen
+                          </a>
+                        </Button>
                         <Field>
                           <FieldLabel>Aktueller Match-Sharecode</FieldLabel>
                           <Input
@@ -491,17 +502,22 @@ export function MatchImportsPage({ user }: Props) {
                             placeholder="CSGO-…"
                           />
                           <FieldDescription>
-                            Ein aktuelles Match als Ausgangspunkt für weitere
-                            Matches.
+                            Öffne in CS2 „Ansehen“ → „Deine Matches“, wähle ein
+                            eigenes Match aus und kopiere über „Teilen“ den
+                            Match-Sharecode. Füge den vollständigen Code mit
+                            „CSGO-“ am Anfang hier ein. Das Match darf höchstens
+                            einen Monat alt sein und dient als Ausgangspunkt
+                            für weitere Matches.
+                          </FieldDescription>
+                          <FieldDescription>
+                            Auf der Steam-Seite „Persönliche Spieldaten“ erhältst
+                            du über „Aufnahme herunterladen“ nur die Demo-Datei.
+                            Den Match-Sharecode kopierst du direkt in CS2.
                           </FieldDescription>
                         </Field>
-                        <Button asChild variant="ghost" size="sm">
-                          <a
-                            href="https://steamcommunity.com/my/gcpd/730/?tab=authcodes"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            History-Freigabe bei Steam öffnen
+                        <Button asChild variant="outline" size="sm">
+                          <a href="steam://rungameid/730">
+                            CS2 über Steam öffnen
                           </a>
                         </Button>
                       </>

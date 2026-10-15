@@ -32,6 +32,28 @@ Vite zeigt die tatsächliche Browser-Adresse an. Die API ist nur lokal unter `12
 
 Ein bisher separat gestartetes Vite zuerst beenden, falls Port 5173 belegt ist. `pnpm dev:client` in `admin-panel` startet nur das Frontend und benötigt eine laufende API auf Port 8080.
 
+### Produktionsdaten lokal verwenden
+
+Die lokale Umgebung verbindet sich nie mit der Produktionsdatenbank. Sonst würden Startmigrationen, Dev-Admin-Rechte und jeder Test direkt auf Produktion wirken. Stattdessen holt `pnpm pull:prod` (oder `node pull-prod.mjs`) eine Kopie und ersetzt damit die lokalen Daten:
+
+- MongoDB komplett, ohne die Sitzungen der Produktion. Lokale Sitzungen bleiben erhalten; Benutzer sind über ihre Steam-ID verknüpft, die eigene Anmeldung gilt also weiter.
+- Hochgeladene Lineup-Bilder und die Szenen der Abwurfsicht (`/uploads`).
+- Die MatchZy-Lineup-Dateien aus `cs2_data` (`savednades.json`, Captures, Receipts, Maps und Metadaten). Ohne sie würde der Nades-Sync beim Start die alte lokale `savednades.json` über die frisch eingespielte Datenbank importieren. Laufende Review- und Nachaufnahme-Anfragen bleiben auf dem Server.
+- Demo-Dateien bleiben auf dem Server. Demo-Einträge sind lokal sichtbar, ihre Dateien fehlen.
+
+Das Skript lädt zuerst beides herunter und ersetzt erst danach die lokalen Daten. Bei einem Verbindungsfehler bleibt also alles unverändert. Läuft die Entwicklungsumgebung, werden API und Demo-Worker währenddessen gestoppt und danach wieder gestartet, auch wenn der Abgleich fehlschlägt. Die Kopie enthält auch Servereinstellungen und Match-Zugangsdaten aus der Datenbank; die Deployment-Variablen wie `UPLOADTHING_TOKEN` gehören nicht dazu.
+
+Der Zugang läuft über SSH mit einem eigenen Schlüssel, der am Server nur `ops/prod-dump.sh` ausführen darf. Das Skript sucht die Container über die Compose-Labels `admin-panel` und `mongodb` und kennt nur die Befehle `mongo`, `uploads` und `nades`. Einrichtung am Server als der Benutzer, der Docker verwenden darf:
+
+```sh
+mkdir -p ~/bin && cat > ~/bin/playbook-prod-dump   # Inhalt von ops/prod-dump.sh einfügen, Strg+D
+chmod 755 ~/bin/playbook-prod-dump
+~/bin/playbook-prod-dump uploads | tar -tf - | head   # Test
+echo "command=\"$HOME/bin/playbook-prod-dump\",restrict <öffentlicher Schlüssel>" >> ~/.ssh/authorized_keys
+```
+
+Lokal steht das SSH-Ziel in `PLAYBOOK_PROD_SSH` (Standard `playbook-prod`), am einfachsten als Host-Alias in `~/.ssh/config` mit `HostName`, `User`, `IdentityFile` und `IdentitiesOnly yes`.
+
 Die Entwicklungsumgebung startet keinen CS2-Gameserver und erhält keinen Docker-Socket. Anmeldung, Dashboard und gespeicherte Daten lassen sich lokal entwickeln; Gameserver-Steuerung und Live-Diagnosen benötigen den vollständigen Deployment-Stack.
 
 ## Deployment
@@ -229,7 +251,7 @@ Der Maps-Bereich enthält den Active-Duty-Pool aus CS2 Season Five: Mirage, Dust
 
 Eigene Workshop-Maps werden mit Anzeigename, internem BSP-Namen und Steam-Workshop-ID gespeichert. Optional kann eine Radaransicht hochgeladen oder per URL hinterlegt werden; ihr kompletter Bildrahmen ist die feste Platzierungsgrenze. Dieselbe Workshop-ID landet in `workshopMaps`, sodass MultiAddonManager die Map nach `Apply maps & restart` lädt. Der interne Map-Name verbindet die Map-Karte mit den passenden Playbook-Lineups.
 
-Die Kartenansicht zeichnet jede vollständig platzierte Nade auf dem echten Radar ein: Kreis für die Wurfposition, Raute für den Landepunkt und eine farbige, gerichtete Verbindung dazwischen. Die Kurve visualisiert die Richtung in der Draufsicht, nicht die ballistische Flughöhe. Ein Klick auf eine Route öffnet das Lineup zum Bearbeiten.
+Die Kartenansicht zeichnet jede vollständig platzierte Nade auf dem echten Radar ein: Kreis für die Wurfposition, Raute für den Landepunkt und eine farbige, gerichtete Verbindung dazwischen. Die Kurve visualisiert die Richtung in der Draufsicht, nicht die ballistische Flughöhe. Ein Klick auf eine Route öffnet das Lineup zum Bearbeiten. Teilen sich mehrere Lineups Start und Ziel, öffnet ein Klick auf den gestapelten Marker darüber eine Auswahl mit einem Marker je Lineup. Offizielle Lineups tragen dort ein Buch-Symbol. Beim Überfahren erscheinen Name und Wurftechnik, bei offiziellen Lineups auch die Videovorschau. Ein zweiter Klick auf den Marker, Escape oder ein Klick daneben schließt die Auswahl.
 
 Ersteller vervollständigen ihre noch nicht offiziellen Aufnahmen direkt auf der jeweiligen Lineup-Seite:
 
@@ -243,6 +265,27 @@ Alle Granatentypen verwenden dieselbe Kartenansicht. Die Platzierungswerkzeuge �
 „Freigabe zurücknehmen“ ist auf der Detailseite und im Review für Ersteller und Plattform-Admins verfügbar. Die Aufnahme und ihre Medien bleiben erhalten und unter „Alle“ sichtbar; „Offiziell“ und „Must Know“ werden entfernt. Der Ersteller kann die Aufnahme anschließend wieder vollständig bearbeiten und erneut zum Review einreichen. Ein noch offenes Review lässt sich über „Review zurücknehmen“ zurückziehen.
 
 Die Radarpositionen werden normiert zwischen `0` und `1` gespeichert. Dadurch bleiben sie unabhängig von Bildschirmgröße und Bildauflösung. `landingPos`, `throwFromTitle`, `throwToTitle`, `radarFrom` und `radarTo` sind Panel-Metadaten in MongoDB. Sie werden beim Ingame-Sync erhalten, aber nicht in MatchZys `savednades.json` geschrieben, weil das Plugin diese Felder nicht kennt.
+
+## Abwurfsicht
+
+Die Lineup-Seite hat neben der Karte den Tab **Abwurfsicht**, offizielle Lineups haben denselben Eintrag neben Video und Fotos. Er zeigt die Map aus Startposition und Blickwinkel des Lineups, mit Fadenkreuz am Zielpunkt. Die Kamera steht auf dem Boden unter der gespeicherten Position, wie nach `.loadnade` im Spiel. Das Plugin speichert die Position beim Abwurf, bei Jumpthrows also mitten im Sprung. Die Belichtung passt sich wie im Spiel an die Helligkeit der Ansicht an. Shift gedrückt halten vergrößert die Ansicht dreifach, wie der Fadenkreuz-Zoom der Review-Fotos. Das Bild ist kein Screenshot. Die Website rendert es mit three.js aus der Map-Geometrie und den vorberechneten Lightmaps. Smokes, Spieler, Kabel und bewegliche Props fehlen, Wasser erscheint als getönte Fläche ohne Spiegelung. Materialien mit zwei überblendeten Schichten zeigen nur die erste Schicht. Auf Dust II wirkt der Putz deshalb heller und einheitlicher als im Spiel. Für noch nicht reviewte Aufnahmen ohne Fotos reicht das, um den Wurf einzuordnen.
+
+Der Dienst `map-scenes` erstellt die Szenen. Er liest die Map-Archive read-only aus `cs2_data` (`game/csgo/maps/<map>.vpk`) und exportiert sie mit [Source 2 Viewer](https://github.com/ValveResourceFormat/ValveResourceFormat) 20.0. Danach verkleinert er sie mit glTF-Transform: nur Farbtexturen mit 512 px als WebP, Meshopt-komprimierte Geometrie, Lightmap mit höchstens 4096 px. Die Szene liegt zusätzlich gzip-komprimiert vor und wird so ausgeliefert. Beim ersten Öffnen lädt der Browser je Map 22 MB (Mirage) bis 64 MB (Inferno), zusammen belegen die sieben Active-Duty-Maps rund 285 MB. Ein Export braucht mit einer CPU ein bis zwei Minuten je Map. Der Dienst exportiert immer die Active-Duty-Maps aus `admin-panel/shared/maps.ts`, dazu jede weitere Map, sobald es dort ein Lineup gibt. Workshop-Maps liegen nicht unter `game/csgo/maps` und bekommen keine Abwurfsicht.
+
+Der Dienst prüft alle zehn Minuten Größe und Änderungszeit der Archive. Nach einem CS2-Update exportiert er eine geänderte Map neu, sobald das Archiv fünf Minuten unverändert ist. Ein fehlgeschlagener Export wird nach einem Tag oder bei einer neuen Map-Version wiederholt. Die vorherige Szene bleibt bis dahin erhalten. Die Dateien liegen in `admin_panel_uploads` unter `map-scenes/`. Ihre Namen enthalten den Inhalts-Hash, deshalb liefert die API sie mit einem Jahr Browser-Cache aus. `manifest.json` im selben Ordner nennt die aktuelle Datei, die Quelle und den letzten Fehler je Map:
+
+```sh
+docker compose logs -f map-scenes
+docker compose exec admin-panel cat /uploads/map-scenes/manifest.json
+```
+
+Der Container läuft mit read-only Dateisystem, ohne Capabilities, mit einer CPU und 3 GB Speicherlimit. Das Image ist Debian-basiert, weil Source 2 Viewer nur glibc-Builds veröffentlicht. Download und SHA-256-Prüfsummen für x64 und arm64 stehen in `admin-panel/Dockerfile.map-scenes`. Für eine neue Version Version und beide Prüfsummen dort ändern. Wer Export- oder Optimierungsparameter ändert, erhöht `MAP_SCENE_PIPELINE` in `admin-panel/src/map-scenes.ts`, damit alle Maps beim nächsten Durchlauf neu entstehen.
+
+Lokal startet `pnpm dev` den Dienst nicht. `pnpm pull:prod` kopiert die fertigen Szenen mit dem Upload-Volume, das sind etwa 285 MB zusätzlich. Zum Testen des Exports braucht der Dienst ein Verzeichnis mit `game/csgo` aus einer CS2-Installation. Dann über das Profil starten:
+
+```sh
+MAP_SCENE_GAME_FILES=/pfad/zur/cs2-installation docker compose --env-file .env.development -f docker-compose.dev.yml --profile map-scenes up --build map-scenes
+```
 
 ## Wartung und Diagnose
 
@@ -272,7 +315,7 @@ Neue Installationen verwenden das Compose-Projekt `playbook` und das Server-Plug
 | --- | --- |
 | `admin_panel_mongodb` | Dashboard-Settings, Admins, Nades und Aktionen |
 | `admin_panel_runtime` | private JSON-Dateien für den CS2-Start |
-| `admin_panel_uploads` | Lineup-Bilder |
+| `admin_panel_uploads` | Lineup-Bilder und Szenen der Abwurfsicht (`map-scenes/`) |
 | `cs2_data` | Gameserver, Mods und generierte Configs |
 
 ## Checks

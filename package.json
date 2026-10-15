@@ -5,6 +5,7 @@
   "packageManager": "pnpm@10.12.1",
   "scripts": {
     "dev": "node dev.mjs",
+    "pull:prod": "node pull-prod.mjs",
     "web": "pnpm --dir admin-panel dev:client",
     "api": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f --no-log-prefix --tail 200 api",
     "worker": "docker compose --env-file .env.development -f docker-compose.dev.yml logs -f --no-log-prefix --tail 200 demo-worker"

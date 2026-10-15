@@ -1189,6 +1189,21 @@ button:not(:disabled),
 .lineup-radar { min-width: 0; position: sticky; top: 5rem; }
 .lineup-radar .radar-map svg { max-height: calc(100dvh - 15rem); width: 100%; }
 .lineup-sidebar { display: grid; gap: 1.5rem; min-width: 0; }
+.lineup-view-tabs { gap: 0.75rem; }
+.lineup-pov { display: grid; gap: 0.75rem; min-width: 0; }
+.lineup-pov-stage { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line-default); border-radius: var(--radius-lg); background: var(--surface-0); }
+.lineup-pov-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.lineup-pov-canvas:active { cursor: grabbing; }
+.lineup-pov-canvas:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
+.lineup-pov-status { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 0.65rem; padding: 1.5rem; color: var(--text-secondary); font-size: var(--type-sm); text-align: center; }
+.lineup-pov-crosshair { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
+.lineup-pov-crosshair svg { position: absolute; top: -12px; left: -12px; width: 24px; height: 24px; overflow: visible; }
+.lineup-pov-crosshair path { fill: none; stroke-linecap: square; }
+.lineup-pov-caption { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; }
+/* In the official media stage the reconstruction fills the 16:9 frame; the note floats over the image. */
+.official-media-stage .lineup-pov, .official-media-stage .lineup-pov-stage { height: 100%; }
+.official-media-stage .lineup-pov-stage { border: 0; border-radius: 0; }
+.official-media-stage .lineup-pov-caption { position: absolute; right: 0.75rem; bottom: 0.75rem; left: 0.75rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); padding: 0.4rem 0.4rem 0.4rem 0.75rem; background: rgb(7 12 16 / 78%); backdrop-filter: blur(6px); }
 .lineup-coordinates { font-size: var(--type-sm); color: var(--muted-foreground); }
 .lineup-coordinates summary { cursor: pointer; }
 .lineup-review { display: grid; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1rem; }
@@ -1248,7 +1263,7 @@ button:not(:disabled),
 @container workspace (max-width: 1300px) {
   .official-lineup-layout { grid-template-columns: minmax(0, 1fr) 19rem; grid-template-rows: min-content 1fr; gap: 1rem 1.5rem; }
   .official-lineup-main { grid-column: 1; grid-row: 1; }
-  .official-photo-picker { grid-column: 1; grid-row: 2; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .official-photo-picker { grid-column: 1; grid-row: 2; grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .official-lineup-sidebar { grid-column: 2; grid-row: 1 / 3; }
 }
 @container workspace (max-width: 850px) {
@@ -1304,6 +1319,29 @@ button:not(:disabled),
 .radar-spot { border-color: var(--spot-color); background: var(--spot-color); }
 .radar-spot-stack { box-shadow: 3px 3px 0 var(--console), 4px 4px 0 var(--spot-color), 0 2px 8px #0008; }
 .radar-spot-asset { width: 2.6rem; height: 2.6rem; border: 0; background: transparent; box-shadow: none; }
+.radar-stack-open { --stack-x: -50%; --stack-y: calc(-100% - 1.6rem); --arrow-x: 50%; position: absolute; z-index: 4; display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem; transform: translate(var(--stack-x), var(--stack-y)); border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface-1); box-shadow: 0 6px 18px #0009; }
+.radar-stack-open[data-anchor="start"] { --stack-x: -1.25rem; --arrow-x: 1.25rem; }
+.radar-stack-open[data-anchor="end"] { --stack-x: calc(-100% + 1.25rem); --arrow-x: calc(100% - 1.25rem); }
+.radar-stack-open[data-placement="below"] { --stack-y: 1.6rem; }
+/* Pointer towards the stacked marker below (or above) the bubble, painted behind the lineup markers. */
+.radar-stack-open::after { content: ""; position: absolute; z-index: -1; top: calc(100% - 5px); left: var(--arrow-x); width: 10px; height: 10px; margin-left: -5px; transform: rotate(45deg); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.radar-stack-open[data-placement="below"]::after { top: auto; bottom: calc(100% - 5px); border: 0; border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.radar-stack-item { display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; color: var(--console); background: var(--spot-color); box-shadow: 0 0 0 2px var(--console); transition: transform var(--motion-fast) var(--ease-out); }
+.radar-stack-item[data-team="t"] { --spot-color: var(--side-t); }
+.radar-stack-item[data-team="ct"] { --spot-color: var(--side-ct); }
+.radar-stack-item[data-team="both"], .radar-stack-item[data-team="unassigned"] { --spot-color: var(--text-secondary); }
+.radar-stack-item[data-official] { width: 2rem; height: 2rem; box-shadow: 0 0 0 2px var(--console), 0 0 0 4px var(--text-strong); }
+.radar-stack-item svg { width: 1rem; height: 1rem; }
+.radar-stack-item:hover, .radar-stack-item:focus-visible { outline: 3px solid var(--text-strong); outline-offset: 3px; transform: scale(1.08); }
+.radar-stack-caption { position: absolute; bottom: calc(100% + 0.45rem); left: var(--arrow-x); max-width: 18rem; overflow: hidden; transform: translateX(-50%); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.25rem 0.5rem; color: var(--text-secondary); background: var(--popover); font-size: var(--type-xs); text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.radar-stack-caption strong { color: var(--text-strong); font-weight: 600; }
+.radar-stack-open[data-anchor="start"] .radar-stack-caption { left: 0; transform: none; }
+.radar-stack-open[data-anchor="end"] .radar-stack-caption { right: 0; left: auto; transform: none; }
+.radar-stack-open[data-placement="below"] .radar-stack-caption { top: calc(100% + 0.45rem); bottom: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .radar-stack-open { animation: radar-stack-open var(--motion-base) var(--ease-out); }
+}
+@keyframes radar-stack-open { from { opacity: 0; translate: 0 0.35rem; } }
 .radar-marker-art { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 2px 3px #0008); }
 .radar-spot .radar-marker-label { position: relative; display: grid; place-items: center; color: var(--console); font-size: var(--type-base); }
 

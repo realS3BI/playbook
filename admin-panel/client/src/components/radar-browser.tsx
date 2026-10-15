@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowUp, MapPin, ZoomIn } from "lucide-react";
+import { ArrowUp, BookOpen, MapPin } from "lucide-react";
 import { Button } from "./ui/button";
 import { CrosshairView, useHeldReviewSlot } from "./lineup-presentation";
 import { REVIEW_STEPS } from "../../../shared/review-media";
@@ -14,8 +14,7 @@ import { type RadarGroup, type RadarLineup, type RadarSide } from "../lib/radar-
 import { radarMarkerAsset } from "../lib/nade-assets";
 import { TEAM_LABELS, isLineupTeam } from "../../../shared/lineup-teams";
 import { cn } from "../lib/utils";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-import { GrenadeIcon, ThrowClickIcon } from "./nade-icons";
+import { ThrowClickIcon } from "./nade-icons";
 import { throwAttributeSummary } from "../../../shared/throw-attributes";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "./ui/empty";
 
@@ -34,6 +33,10 @@ export function RadarBrowser({ map, side, groups, selected, counterparts, expand
   const heldSlot = useHeldReviewSlot();
   const [preview, setPreview] = useState<{ group: RadarGroup; index: number; left: number; top: number } | null>(null);
   const [zoomNade, setZoomNade] = useState<RadarLineup | null>(null);
+  const [stackFocus, setStackFocus] = useState<RadarLineup | null>(null);
+  const focusStack = useRef(false);
+  const closeOptions = useRef(onCloseOptions);
+  closeOptions.current = onCloseOptions;
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewTrigger = useRef<HTMLElement | null>(null);
   function cancelTimer() { if (hoverTimer.current) clearTimeout(hoverTimer.current); }
@@ -90,6 +93,24 @@ export function RadarBrowser({ map, side, groups, selected, counterparts, expand
       document.removeEventListener("keydown", escape);
     };
   }, [selected, expanded, zoomNade, onDismiss]);
+  useEffect(() => {
+    setStackFocus(null);
+    if (!expanded) return;
+    if (focusStack.current) document.querySelector<HTMLElement>(".radar-stack-open a")?.focus();
+    focusStack.current = false;
+    function collapse(event: PointerEvent) {
+      if (event.target instanceof Element && event.target.closest(".radar-stack-open, .radar-preview, [data-stack-trigger]")) return;
+      closeOptions.current();
+    }
+    function escape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      closeOptions.current();
+      optionsTrigger.current?.focus();
+    }
+    document.addEventListener("pointerdown", collapse);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", collapse); document.removeEventListener("keydown", escape); };
+  }, [expanded?.id]);
   if (!map.radarUrl) return <Empty className="border"><EmptyHeader><MapPin /><EmptyTitle>Keine Radarkarte hinterlegt</EmptyTitle><EmptyDescription>Alle Lineups findest du in der Liste darunter.</EmptyDescription></EmptyHeader></Empty>;
   const { width, height } = radarCanvasSize(map);
   function marker(group: RadarGroup, markerSide: RadarSide, secondary = false) {
@@ -120,17 +141,39 @@ export function RadarBrowser({ map, side, groups, selected, counterparts, expand
       if (!event.shiftKey || event.altKey || !aimNade || !secondary) return false;
       event.preventDefault(); cancelTimer(); setPreview(null); previewTrigger.current = event.currentTarget; setZoomNade(aimNade); return true;
     };
+    // An open stack keeps its marker and shows one marker per lineup in a bubble above it.
+    // Official lineups carry the guide icon.
+    const open = secondary && group === expanded && group.nades.length > 1;
+    const stack = open && <div className="radar-stack-open" style={style}
+      data-anchor={point.x < 0.15 ? "start" : point.x > 0.85 ? "end" : "center"} data-placement={point.y < 0.18 ? "below" : "above"} role="group" aria-label={`${group.nades.length} Lineups · ${group.title}`}>
+      <span className="radar-stack-caption" aria-hidden="true">{stackFocus ? <><strong>{stackFocus.displayName || stackFocus.name}</strong> · {throwAttributeSummary(stackFocus)}</> : `${group.nades.length} Lineups · Lineup wählen`}</span>
+      {group.nades.map(nade => {
+        const single = { ...group, nades: [nade] };
+        const video = nade.official && nade.reviewMedia?.video;
+        return <Link key={lineupKey(nade)} to={href(nade)} className="radar-stack-item" data-team={nade.team || "unassigned"} data-official={nade.official || undefined}
+          aria-label={`${nade.displayName || nade.name}${nade.official ? " · Offiziell" : ""} · ${throwAttributeSummary(nade)}`}
+          onMouseEnter={event => { setStackFocus(nade); if (video) showPreview(single, event.currentTarget); }}
+          onMouseLeave={() => { setStackFocus(current => current === nade ? null : current); if (video) hidePreview(); }}
+          onFocus={event => { setStackFocus(nade); if (video) showPreview(single, event.currentTarget); }}
+          onBlur={event => { setStackFocus(current => current === nade ? null : current); if (video && !(event.relatedTarget instanceof Element && event.relatedTarget.closest(".radar-preview"))) hidePreview(); }}
+          onClick={event => {
+            if (!event.shiftKey || event.altKey || !nade.official || !nade.reviewMedia?.aim) return;
+            event.preventDefault(); cancelTimer(); setPreview(null); previewTrigger.current = event.currentTarget; onCloseOptions(); setZoomNade(nade);
+          }}>{nade.official && <BookOpen aria-hidden="true" />}</Link>;
+      })}
+    </div>;
     if (secondary && group.nades.length === 1) return <Link key={`true-${group.id}`} to={href(group.nades[0])}
       className={className} data-team={team || "unassigned"} style={style} aria-label={label} {...hoverProps} onClick={openAim}>{content}</Link>;
-    return <button key={`${secondary}-${group.id}`} type="button" className={className}
-      data-team={team || "unassigned"} style={style} aria-label={label}
+    return <Fragment key={`${secondary}-${group.id}`}><button type="button" className={className}
+      data-team={team || "unassigned"} data-stack-trigger={open || undefined} style={style} aria-label={label}
       aria-pressed={active} aria-expanded={secondary ? group === expanded : undefined}
-      aria-haspopup={secondary ? "dialog" : undefined}
-      {...hoverProps} onClick={event => {
+      aria-haspopup={secondary ? "true" : undefined}
+      {...(open ? {} : hoverProps)} onClick={event => {
         if (openAim(event)) return;
-        if (secondary) { optionsTrigger.current = event.currentTarget; onExpand(group); }
+        if (open) { onCloseOptions(); return; }
+        if (secondary) { cancelTimer(); setPreview(null); optionsTrigger.current = event.currentTarget; focusStack.current = event.detail === 0; onExpand(group); }
         else onSelect(group);
-      }}>{content}</button>;
+      }}>{content}</button>{stack}</Fragment>;
   }
   return <div className="radar-browser" role="group" aria-label={`Interaktive Radarkarte von ${map.name}`}>
     <div className="radar-browser-image" style={{ aspectRatio: `${width} / ${height}`, "--radar-aspect": width / height } as CSSProperties}>
@@ -160,20 +203,6 @@ export function RadarBrowser({ map, side, groups, selected, counterparts, expand
       })()}
     </div>, document.body)}
     <CrosshairView key={zoomNade ? lineupKey(zoomNade) : "closed"} nade={zoomNade} open={!!zoomNade} onOpenChange={open => { if (!open) { setZoomNade(null); previewTrigger.current?.focus(); } }} />
-    <Dialog open={!!expanded} onOpenChange={open => { if (!open) onCloseOptions(); }}>
-      <DialogContent onCloseAutoFocus={event => {
-        event.preventDefault();
-        optionsTrigger.current?.focus();
-      }}>
-        <DialogHeader><DialogTitle>Lineup auswählen</DialogTitle><DialogDescription>{expanded?.nades.length} Lineups mit diesem Start und Ziel.</DialogDescription></DialogHeader>
-        <ol className="map-lineup-list">
-          {expanded?.nades.map(nade => <li key={lineupKey(nade)}><Link className="map-lineup-row" to={href(nade)} onClick={event => { if (event.shiftKey && nade.official && nade.reviewMedia?.aim) { event.preventDefault(); onCloseOptions(); setZoomNade(nade); } }}>
-            <span className="map-lineup-kind"><GrenadeIcon type={nade.type || ""} /></span>
-            <div className="map-lineup-name"><strong>{nade.displayName || nade.name}</strong><span>{nade.throwFromTitle || "Startposition"} → {nade.throwToTitle || "Landeposition"}</span><span>{throwAttributeSummary(nade)}</span></div>
-          </Link>{nade.official && nade.reviewMedia?.aim && <Button size="sm" variant="ghost" onClick={() => { onCloseOptions(); setZoomNade(nade); }}><ZoomIn />Fadenkreuz-Zoom</Button>}</li>)}
-        </ol>
-      </DialogContent>
-    </Dialog>
   </div>;
 }
 

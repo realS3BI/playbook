@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.server.json",
-  "include": ["src/demo-worker-main.ts", "src/demo-parser-process.ts"]
+  "include": ["src/demo-worker-main.ts", "src/demo-parser-process.ts", "src/map-scene-worker-main.ts"]
 }

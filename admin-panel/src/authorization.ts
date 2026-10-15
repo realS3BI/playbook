@@ -36,7 +36,8 @@ export function routeAllowed(user: Actor, method: string, path: string) {
   if (
     method === "GET" &&
     (/^\/uploads\/[^/]+$/.test(path) ||
-      /^\/nades\/video-preview\/[\w-]{1,256}$/.test(path))
+      /^\/nades\/video-preview\/[\w-]{1,256}$/.test(path) ||
+      /^\/map-scenes\/(?:files\/)?[\w.-]{1,96}$/.test(path))
   )
     action = "lineups.read";
   if (path.startsWith("/nades/review/") && !action) action = "lineups.moderate";

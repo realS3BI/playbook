@@ -83,6 +83,29 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
+  # Optional: docker compose --profile map-scenes up map-scenes. Needs CS2 game files under
+  # MAP_SCENE_GAME_FILES (directory containing game/csgo); pnpm pull:prod also copies exported scenes.
+  map-scenes:
+    profiles: [map-scenes]
+    build:
+      context: .
+      dockerfile: admin-panel/Dockerfile.map-scenes
+    init: true
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ${MAP_SCENE_GAME_FILES:-cs2_data}:/cs2-data:ro
+      - uploads:/uploads
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
 volumes:
   mongodb:
   runtime:

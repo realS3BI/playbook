@@ -60,6 +60,28 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
+  # Exports maps with lineups from the game files for the Abwurfsicht on lineup pages.
+  map-scenes:
+    build:
+      context: .
+      dockerfile: admin-panel/Dockerfile.map-scenes
+    restart: unless-stopped
+    init: true
+    depends_on:
+      mongodb:
+        condition: service_started
+    volumes:
+      - cs2_data:/cs2-data:ro
+      - admin_panel_uploads:/uploads
+    mem_limit: 3g
+    cpus: 1
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
   cs2:
     build:
       context: .

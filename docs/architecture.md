@@ -15,6 +15,8 @@ flowchart LR
     Plugin --> HUD[Playbook Panorama-HUD]
     Bootstrap --> MatchZy[MatchZy im MatchZy-Modus]
     Web --> Docker[Docker-Steuerung]
+    Scenes[Abwurfsicht-Export] --> Library
+    Scenes --> Web
 ```
 
 ## Website und Daten
@@ -24,6 +26,10 @@ flowchart LR
 Die API schreibt Servereinstellungen und Berechtigungen in das private Runtime-Volume. Der CS2-Bootstrap liest diese Dateien bei jedem Start und installiert die gewählten Komponenten. Die Website steuert den CS2-Container über Docker und kommuniziert für Konsolenbefehle per RCON. Der Compose-Projektname wird an die API weitergegeben, damit sie zuerst innerhalb des eigenen Stacks nach CS2 sucht.
 
 Lineup-Daten werden zwischen MongoDB und der gemeinsamen `savednades.json` synchronisiert. Aufnahmen, Metadaten und Review-Steuerung verwenden zusätzliche Dateien daneben. Die API erhält ihre erweiterten Metadaten beim Import. Das gemeinsame Basisformat bleibt mit MatchZy kompatibel.
+
+## Abwurfsicht
+
+Der Dienst `map-scenes` liest die Map-Archive aus dem CS2-Volume und exportiert für jede Active-Duty-Map und jede weitere Map mit Lineups eine verkleinerte glTF-Szene samt Lightmap ins Upload-Volume. Die API nennt unter `/api/map-scenes/<map>` die aktuelle Datei. Die Lineup-Seite lädt three.js erst, wenn jemand den Tab „Abwurfsicht“ öffnet, und rendert die Map aus `lineupPos` und `lineupAng`. Betrieb und Grenzen stehen in [Betrieb](operations.md#abwurfsicht).
 
 ## Eigenes Server-Plugin
 

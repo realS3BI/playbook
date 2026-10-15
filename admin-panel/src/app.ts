@@ -26,6 +26,7 @@ import { applyWebNadeAction } from "./nade-review.js";
 import { installReviewUploads } from "./uploadthing.js";
 import { installReviewCapture } from "./review-capture.js";
 import { installVideoPreviews } from "./video-preview.js";
+import { installMapScenes } from "./map-scenes.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "..", "dist");
@@ -113,6 +114,7 @@ export function createApp({ config, store, compose, nadesSync, restartScheduler 
   });
   installReviewCapture(app, { config, store });
   installVideoPreviews(app, { store });
+  installMapScenes(app, { directory: join(config.uploadDir || "/uploads", "map-scenes") });
 
   async function controlSettings(req, res) {
     const input: any = sanitizeSettings(req.body?.settings);

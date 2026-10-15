@@ -1,5 +1,5 @@
 import { isPlatformAdmin } from "../../../shared/authorization";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Copy, RefreshCw, Save, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Dialog, DialogTrigger, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from "./ui/empty";
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { TeamIcon, GrenadeIcon } from "./nade-icons";
 import { LINEUP_TEAMS, TEAM_LABELS, isLineupTeam } from "../../../shared/lineup-teams";
 import { ActionButton } from "./action-button";
@@ -25,6 +26,22 @@ import { findLineup, lineupKey, lineupPath, lineupReviewPath } from "../lib/line
 import { inferRadarCalibration, resolveRadarPoints } from "../lib/nade-radar";
 import { LINEUP_CAPTURE_FIELDS, LINEUP_EDIT_FIELDS, lineupPermissions } from "../../../shared/lineup-policy";
 import { THROW_FLAGS, BOOLEAN_THROW_FLAGS, THROW_FLAG_LABELS, CLICK_TYPES, CLICK_LABELS, MOVEMENT_TYPES, MOVEMENT_LABELS, movementType, movementPatch, type MovementType } from "../../../shared/throw-attributes";
+
+// three.js and the scene loader only load when someone opens the Abwurfsicht.
+const LineupPov = lazy(() => import("./lineup-pov"));
+const LINEUP_VIEW_KEY = "playbook.lineupView";
+
+function LineupViews({ map, nade, children }) {
+  const [view, setView] = useState(() => { try { return localStorage.getItem(LINEUP_VIEW_KEY) === "pov" ? "pov" : "map"; } catch { return "map"; } });
+  const choose = (value: string) => { setView(value); try { localStorage.setItem(LINEUP_VIEW_KEY, value); } catch {} };
+  return <Tabs value={view} onValueChange={choose} className="lineup-view-tabs">
+    <TabsList variant="line" aria-label="Ansicht des Lineups"><TabsTrigger value="map">Karte</TabsTrigger><TabsTrigger value="pov">Abwurfsicht</TabsTrigger></TabsList>
+    <TabsContent value="map">{children}</TabsContent>
+    <TabsContent value="pov"><Suspense fallback={<div className="lineup-pov-stage" aria-busy="true" />}>
+      <LineupPov nade={nade} mapName={map.mapName || nade.map} mapLabel={map.name} onShowMap={() => choose("map")} />
+    </Suspense></TabsContent>
+  </Tabs>;
+}
 
 export function LineupPage({ maps, nades, user, onEntriesChange, onRefresh }) {
   const { mapSlug: slug, lineupId } = useParams();
@@ -144,7 +161,8 @@ function LineupContent({ nade, map, nades, user, onEntriesChange, onRefresh, bac
           </div>}
           {detailsDirty && <p className="mt-2 text-xs text-muted-foreground">Speichere die Positionierung zusammen mit deinen weiteren Änderungen über „Speichern“.</p>}
           {stale && <p className="mt-2 text-xs text-muted-foreground" role="status">Diese Aufnahme wurde inzwischen geändert. Verwirf deine Änderungen, um den aktuellen Stand zu laden.</p>}
-        </fieldset> : <><NadeFlightMap map={map} nades={[positionedNade]} calibration={calibration} /><p className="mt-3 text-xs text-muted-foreground">Kreis: Startposition · Raute: Landeposition</p></>}
+        </fieldset> : creating ? <><NadeFlightMap map={map} nades={[positionedNade]} calibration={calibration} /><p className="mt-3 text-xs text-muted-foreground">Kreis: Startposition · Raute: Landeposition</p></>
+          : <LineupViews map={map} nade={nade}><NadeFlightMap map={map} nades={[positionedNade]} calibration={calibration} /><p className="mt-3 text-xs text-muted-foreground">Kreis: Startposition · Raute: Landeposition</p></LineupViews>}
         {map.radarLowerUrl && <p className="mt-3 text-xs text-muted-foreground">1: obere Ebene · 2: untere Ebene. Start und Ziel werden anhand ihrer jeweiligen Höhe zugeordnet. Über den Umschalter rechts oben kannst du die Ebene wechseln und Positionen korrigieren.</p>}
         {!calibration && permissions.position && <p className="mt-3 text-xs text-muted-foreground">{map.mapName === "de_nuke" ? "Für dieses Nuke-Kartenbild fehlt die Kalibrierung der Ebenen. Setze Start und Ziel manuell." : "Für diese Map fehlen verlässliche Referenzen. Setze Start und Ziel auf der Karte. Gespeicherte Markierungen mit Spielkoordinaten dienen als Referenzen für weitere Nades und können über „Positionierung bearbeiten“ korrigiert werden."}</p>}
         </>
