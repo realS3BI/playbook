@@ -3,7 +3,8 @@ import { mkdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { mapSceneSourcePath, type SceneBuild } from "./map-scenes.js";
 
-const EXPORT_TIMEOUT_MS = 15 * 60 * 1000;
+// Maps with many textures take well over 15 minutes on two CPUs.
+const EXPORT_TIMEOUT_MS = 45 * 60 * 1000;
 
 function runViewer(executable: string, args: string[], signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -13,8 +14,9 @@ function runViewer(executable: string, args: string[], signal?: AbortSignal) {
     child.stdout.on("data", keep);
     child.stderr.on("data", keep);
     child.on("error", reject);
-    child.on("close", code => {
+    child.on("close", (code, killed) => {
       if (code === 0) return resolve();
+      if (killed && !signal?.aborted) return reject(new Error(`Source 2 Viewer nach ${EXPORT_TIMEOUT_MS / 60000} Minuten abgebrochen (${killed}): ${tail.trim().split("\n").slice(-1)[0] || ""}`));
       // The exception message precedes the stack trace; keep it ahead of the last frames.
       const lines = tail.trim().split("\n").map(line => line.trim()).filter(Boolean);
       const cause = lines.find(line => /exception/i.test(line) && !line.startsWith("at "));
