@@ -18,9 +18,13 @@ const workRoot = join(directory, ".work");
 const client = new MongoClient(process.env.MAP_SCENE_MONGODB_URI || "mongodb://mongodb:27017/cs2_admin_panel");
 
 // Active duty maps always get a scene. Other maps follow with their first lineup.
+// Maps with the most lineups are exported first, a full pass takes a while.
 async function sceneMaps(db) {
   const document = await db.collection("nades").findOne({ _id: "current" }, { projection: { "entries.map": 1 } });
-  return [...ACTIVE_DUTY_MAPS.map(map => map.mapName), ...(document?.entries || []).map(entry => String(entry?.map || ""))];
+  const lineups = new Map<string, number>();
+  for (const entry of document?.entries || []) lineups.set(String(entry?.map || ""), (lineups.get(String(entry?.map || "")) || 0) + 1);
+  return [...new Set([...ACTIVE_DUTY_MAPS.map(map => map.mapName), ...lineups.keys()])]
+    .sort((a, b) => (lineups.get(b) || 0) - (lineups.get(a) || 0) || a.localeCompare(b));
 }
 
 try {

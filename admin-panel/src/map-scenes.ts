@@ -60,14 +60,14 @@ async function removeUnusedSceneFiles(directory: string, manifest: SceneManifest
   }
 }
 
-// Exports maps whose archive is new or changed since the last export. A failed export is
-// retried after an hour, or as soon as Valve ships a new version of the map.
+// Exports maps whose archive is new or changed since the last export, in the given order. A failed
+// export is retried after an hour, or as soon as Valve ships a new version of the map.
 export async function refreshMapScenes({ maps, gameDir, directory, build, now = Date.now(), log = console.log, signal = undefined as AbortSignal | undefined }) {
   await mkdir(directory, { recursive: true });
   const manifest = await readSceneManifest(directory);
   const sameSource = (a: Source | undefined, b: Source) => a?.size === b.size && a?.mtimeMs === b.mtimeMs;
   let exported = 0;
-  for (const map of [...new Set<string>(maps)].filter(map => MAP_SCENE_NAME.test(map)).sort()) {
+  for (const map of [...new Set<string>(maps)].filter(map => MAP_SCENE_NAME.test(map))) {
     if (signal?.aborted) break;
     let source: Source;
     try {

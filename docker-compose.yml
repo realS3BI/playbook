@@ -73,8 +73,8 @@ services:
     volumes:
       - cs2_data:/cs2-data:ro
       - admin_panel_uploads:/uploads
-    mem_limit: 3g
-    cpus: 1
+    mem_limit: 8g
+    cpus: 2
     pids_limit: 128
     read_only: true
     tmpfs:

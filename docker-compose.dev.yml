@@ -97,7 +97,7 @@ services:
     volumes:
       - ${MAP_SCENE_GAME_FILES:-cs2_data}:/cs2-data:ro
       - uploads:/uploads
-    mem_limit: 3g
+    mem_limit: 8g
     cpus: 2
     pids_limit: 128
     read_only: true
