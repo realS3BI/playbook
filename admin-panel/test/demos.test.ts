@@ -16,6 +16,7 @@ import {
   roundClock,
   type SceneReference,
 } from "../shared/demos.js";
+import { areaEffects, frameAt, grenadeAt, lerpAngle } from "../shared/demo-replay.js";
 import { newStratContent } from "../shared/strats.js";
 
 const mongo = { skip: !process.env.TEST_MONGODB_URI };
@@ -669,4 +670,47 @@ test("loadouts list the active kit, grenades and bomb and only store changes", (
   const economy = roundEconomy(states, frames, 128, 192);
   assert.deepEqual(economy.t, { buy: "semi-buy", equipment: 2900, money: 1300, players: 1 });
   assert.deepEqual(economy.ct, { buy: "pistol", equipment: 200, money: 800, players: 1 });
+});
+
+test("3D replay turns the short way, interpolates view and crouch and keeps jumps", () => {
+  assert.equal(lerpAngle(170, -170, 0.5), 180);
+  assert.equal(lerpAngle(-170, 170, 0.25), -175);
+  const player = { id: "a", x: 0, y: 0, z: 0, yaw: 170, pitch: -10, health: 100, side: 2, weapon: "AK-47" };
+  const replay: any = {
+    round: { id: "r1", number: 1, startTick: 0, endTick: 0, duration: 10, winner: 2 },
+    frames: [
+      { time: 0, players: [player, { ...player, id: "b", x: 500 }] },
+      { time: 0.125, players: [{ ...player, x: 20, yaw: -170, pitch: 10, duck: 1 }, { ...player, id: "b", x: 0 }] },
+    ],
+    events: [],
+    grenades: [],
+  };
+  const [a, b] = frameAt(replay, 0.0625);
+  assert.equal(a.x, 10);
+  assert.equal(a.yaw, 180);
+  assert.equal(a.pitch, 0);
+  assert.equal(a.duck, 0.5);
+  // A respawn or teleport is not a run across the map.
+  assert.equal(b.x, 500);
+  // Older analyses have no pitch; the player keeps looking straight ahead.
+  const old = frameAt({ ...replay, frames: replay.frames.map((frame) => ({ ...frame, players: frame.players.map(({ pitch: _pitch, duck: _duck, ...rest }) => rest) })) }, 0.0625);
+  assert.equal(old[0].pitch, undefined);
+  assert.equal(old[0].duck, undefined);
+});
+
+test("3D replay knows how long smokes and fires last and where grenades fly", () => {
+  const replay: any = {
+    round: { id: "r1", number: 1, startTick: 0, endTick: 0, duration: 60, winner: 2, afterEnd: 65 },
+    frames: [],
+    events: [
+      { time: 5, tick: 320, kind: "smokegrenade_detonate", playerId: "a", player: "A", x: 1, y: 2, z: 3, entityId: 7 },
+      { time: 23, tick: 1472, kind: "smokegrenade_expired", playerId: "a", player: "A", x: 1, y: 2, z: 3, entityId: 7 },
+      { time: 58, tick: 3712, kind: "inferno_startburn", playerId: "a", player: "A", x: 4, y: 5, z: 6, entityId: 9 },
+    ],
+    grenades: [],
+  };
+  assert.deepEqual(areaEffects(replay).map(({ kind, start, end }) => [kind, start, end]), [["smoke", 5, 23], ["fire", 58, 65]]);
+  const path = { id: "g", kind: "CSmokeGrenadeProjectile", playerId: "a", points: [{ time: 1, x: 0, y: 0, z: 0 }, { time: 2, x: 10, y: 20, z: 30 }] };
+  assert.deepEqual(grenadeAt(path, 1.5), { x: 5, y: 10, z: 15, index: 0 });
+  assert.equal(grenadeAt(path, 2.5), null);
 });

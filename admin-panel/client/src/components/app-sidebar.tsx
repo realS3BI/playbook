@@ -143,6 +143,11 @@ export function AppSidebar({
         isActive: location.pathname.startsWith("/analysis/prematch"),
       },
       {
+        title: "Gegner",
+        url: "/analysis/opponents",
+        isActive: location.pathname.startsWith("/analysis/opponents"),
+      },
+      {
         title: "Matchimporte",
         url: "/analysis/imports",
         isActive: location.pathname.startsWith("/analysis/imports"),

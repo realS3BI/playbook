@@ -107,6 +107,26 @@ export function acquireMapScene(info: MapSceneInfo, onProgress: Progress) {
   };
 }
 
+// Renderer, sky and lights around a loaded map. Throws when the browser cannot create a WebGL context.
+export function mountMapScene(canvas: HTMLCanvasElement, loaded: LoadedMapScene) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const sky = createSky();
+  const scene = new THREE.Scene();
+  scene.background = sky;
+  scene.add(new THREE.HemisphereLight(0xdde8ff, 0x8a7560, 1.1));
+  const sun = new THREE.DirectionalLight(loaded.sunColor, 1.4);
+  sun.position.copy(loaded.sunDirection).multiplyScalar(-1);
+  scene.add(sun, loaded.root);
+  return {
+    renderer,
+    scene,
+    // The map itself stays cached for the next view.
+    dispose() { scene.remove(loaded.root); sky.dispose(); renderer.dispose(); },
+  };
+}
+
 // First opaque surface below the stored origin, in source units. Leaves, decals and water are skipped.
 export function floorBelow(root: THREE.Object3D, position: Vector3) {
   const start = new THREE.Vector3(position[0], position[1] + 8 * SOURCE_UNIT_METRES, position[2]);

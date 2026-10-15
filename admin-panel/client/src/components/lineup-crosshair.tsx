@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { VERTICAL_FOV_DEGREES } from "../../../shared/map-scene";
+import { useStoredChoice } from "../lib/stored-choice";
 
 // Sizes in pixels at a screen height of 1080, as in CS2 crosshair generators.
 const CROSSHAIRS = [
@@ -9,24 +10,6 @@ const CROSSHAIRS = [
   { id: "lineup", title: "Lineup-Hilfe", length: 0, thickness: 0, gap: 0, outline: 0, outlineAlpha: 0 },
 ] as const;
 export type CrosshairStyle = typeof CROSSHAIRS[number]["id"];
-
-// Choices are shared by every view on the page and kept in the browser.
-const chosen = new Map<string, string | null>();
-const listeners = new Set<() => void>();
-const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
-function readChoice(key: string) {
-  if (!chosen.has(key)) { try { chosen.set(key, localStorage.getItem(key)); } catch { chosen.set(key, null); } }
-  return chosen.get(key)!;
-}
-function useStoredChoice<T extends string>(key: string, choices: readonly T[], fallback: T) {
-  const stored = useSyncExternalStore(subscribe, () => readChoice(key));
-  const choose = (next: T) => {
-    chosen.set(key, next);
-    try { localStorage.setItem(key, next); } catch {}
-    listeners.forEach(listener => listener());
-  };
-  return [choices.includes(stored as T) ? stored as T : fallback, choose] as const;
-}
 
 export function useCrosshairStyle() {
   return useStoredChoice<CrosshairStyle>("playbook.crosshair", CROSSHAIRS.map(item => item.id), "fine");

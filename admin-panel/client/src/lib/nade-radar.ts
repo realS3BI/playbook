@@ -76,11 +76,15 @@ export function inferRadarCalibration(map: MapDefinition, nades: (PositionedNade
 
 export function worldToRadar(position: string | undefined, calibration: RadarCalibration | null): RadarPoint | null {
   const world = coordinates(position);
-  if (!world || !calibration) return null;
-  const level = calibration.altitudeSplit === undefined ? undefined : world[2] < calibration.altitudeSplit ? "lower" : "upper";
+  return world ? worldPointToRadar(calibration, world[0], world[1], world[2]) : null;
+}
+
+export function worldPointToRadar(calibration: RadarCalibration | null, x: number, y: number, z: number): RadarPoint | null {
+  if (!calibration) return null;
+  const level = calibration.altitudeSplit === undefined ? undefined : z < calibration.altitudeSplit ? "lower" : "upper";
   const projection = level === "lower" ? calibration.lower : calibration;
   if (!projection) return null;
-  const point: RadarPoint = { x: world[0] * projection.xScale + projection.xOffset, y: world[1] * projection.yScale + projection.yOffset,
+  const point: RadarPoint = { x: x * projection.xScale + projection.xOffset, y: y * projection.yScale + projection.yOffset,
     ...(level && { level }) };
   // Do not clamp off-map coordinates onto a false point on the image edge.
   return isRadarPoint(point) ? point : null;

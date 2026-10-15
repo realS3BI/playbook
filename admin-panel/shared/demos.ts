@@ -65,6 +65,12 @@ export type PlayerFrame = {
   y: number;
   z: number;
   yaw: number;
+  /** Degrees, positive looks down. Missing in analyses made before the 3D view. */
+  pitch?: number;
+  /** 0 standing to 1 fully crouched; omitted while standing. */
+  duck?: number;
+  /** Looking through a scope; omitted otherwise. */
+  scoped?: boolean;
   health: number;
   side: number;
   weapon: string;
@@ -256,4 +262,19 @@ export function loadoutSummary(items: string[]) {
     grenades,
     bomb: items.some((item) => key(item).startsWith("c4")),
   };
+}
+
+// Death events name weapons by their internal names.
+const WEAPONS: Record<string, string> = {
+  ak47: "AK-47", m4a1: "M4A4", m4a1_silencer: "M4A1-S", m4a1_silencer_off: "M4A1-S", awp: "AWP", ssg08: "SSG 08",
+  famas: "FAMAS", galilar: "Galil AR", aug: "AUG", sg556: "SG 553", scar20: "SCAR-20", g3sg1: "G3SG1",
+  glock: "Glock-18", hkp2000: "P2000", usp_silencer: "USP-S", usp_silencer_off: "USP-S", p250: "P250",
+  fiveseven: "Five-SeveN", tec9: "Tec-9", cz75a: "CZ75-Auto", deagle: "Desert Eagle", revolver: "R8 Revolver",
+  elite: "Dual Berettas", mac10: "MAC-10", mp9: "MP9", mp7: "MP7", mp5sd: "MP5-SD", ump45: "UMP-45", p90: "P90",
+  bizon: "PP-Bizon", nova: "Nova", xm1014: "XM1014", sawedoff: "Sawed-Off", mag7: "MAG-7", m249: "M249",
+  negev: "Negev", hegrenade: "HE", inferno: "Molotov", taser: "Zeus x27", planted_c4: "Bombe", world: "Welt",
+};
+export function weaponLabel(name: string) {
+  const key = name.toLowerCase().replace(/^weapon_/, "");
+  return WEAPONS[key] || (/knife|bayonet/.test(key) ? "Messer" : name);
 }

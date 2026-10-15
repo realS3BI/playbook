@@ -7,10 +7,13 @@ import {
 } from "react-router-dom";
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   BookOpen,
   Check,
+  Ellipsis,
   Film,
+  ListFilter,
   MapPinned,
   Plus,
   Radio,
@@ -18,6 +21,7 @@ import {
   Trash2,
   Upload,
   UsersRound,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { liveCommand, serverNow } from "@/lib/live";
@@ -53,6 +57,17 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "./ui/empty";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { Field, FieldGroup, FieldDescription } from "./ui/field";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -750,23 +765,17 @@ export function DemoPage({ maps }: Props) {
   const teams = useResource<{ entries: TeamView[] }>("/api/teams");
   const [error, setError] = useState("");
   const [save, setSave] = useState<SceneReference | null>(null);
-  const [start, setStart] = useState<number | null>(null);
-  const [end, setEnd] = useState<number | null>(null);
   const [share, setShare] = useState(false);
+  const [remove, setRemove] = useState(false);
   const [shareTeam, setShareTeam] = useState("");
   const [busy, setBusy] = useState(false);
   const [buyFilter, setBuyFilter] = useState({ t: "", ct: "" });
-  const position = useRef(0);
   const selectedFocus = useRef("");
   const navigate = useNavigate();
   const demo = resource.data?.demo;
   const round =
     demo?.summary?.rounds.find((round) => round.id === params.get("round")) ||
     demo?.summary?.rounds[0];
-  useEffect(() => {
-    setStart(null);
-    setEnd(null);
-  }, [demoId, round?.id]);
   if (!demo)
     return (
       <>
@@ -779,6 +788,17 @@ export function DemoPage({ maps }: Props) {
     );
   const canPrepare = teams.data?.entries.find((team) => team.id === demo.teamId)
     ?.permissions["analysis.prepare"];
+  const canShare = demo.canEdit && demo.status === "ready" && !demo.teamId;
+  const owner = demo.teamId
+    ? teams.data?.entries.find((team) => team.id === demo.teamId)?.name || "Teamdemo"
+    : "Privat";
+  const removeDemo = async () => {
+    await api(`/api/analysis/demos/${demo.id}`, {
+      method: "DELETE",
+      body: "{}",
+    });
+    navigate("/analysis");
+  };
   // Without explicit bounds the whole round is shown, from the buy phase to the after-round pause.
   const startParam = params.has("start") ? Number(params.get("start")) : NaN;
   const endParam = params.has("end") ? Number(params.get("end")) : NaN;
@@ -793,6 +813,8 @@ export function DemoPage({ maps }: Props) {
       : round
         ? roundEnd(round)
         : 1;
+  // Links from a review open only the section discussed there.
+  const section = !!round && (from > roundStart(round) || to < roundEnd(round));
   const buyMatches = (entry: NonNullable<typeof round>) =>
     (["t", "ct"] as const).every(
       (side) => !buyFilter[side] || entry.economy?.[side]?.buy === buyFilter[side],
@@ -813,299 +835,25 @@ export function DemoPage({ maps }: Props) {
         focusId: focus,
       }
     : null;
-  return (
+  // The followed player stays in focus when switching rounds.
+  const openRound = (roundId: string) =>
+    setParams(
+      selectedFocus.current
+        ? { round: roundId, focus: selectedFocus.current }
+        : { round: roundId },
+    );
+  const dialogs = (
     <>
-      <WorkspaceHeader
-        title={demo.title}
-        description={`${sourceLabels[demo.source]} · ${demo.teamId ? teams.data?.entries.find((team) => team.id === demo.teamId)?.name || "Teamdemo" : "Privat"}`}
-      >
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link to="/analysis">Alle Matches</Link>
-          </Button>
-          {demo.canEdit && demo.status === "ready" && !demo.teamId && (
-            <Button variant="outline" onClick={() => setShare(true)}>
-              <Share2 data-icon="inline-start" />
-              Für Team freigeben
-            </Button>
-          )}
-          {demo.canEdit && (
-            <ConfirmAction
-              title="Demo löschen"
-              description="Die Datei und ihre Analyse werden gelöscht. Verknüpfte Reviews und Strats müssen vorher entfernt werden."
-              onConfirm={async () => {
-                await api(`/api/analysis/demos/${demo.id}`, {
-                  method: "DELETE",
-                  body: "{}",
-                });
-                navigate("/analysis");
-              }}
-            >
-              <Trash2 />
-              Löschen
-            </ConfirmAction>
-          )}
-        </div>
-      </WorkspaceHeader>
-      <Feedback error={error || resource.error || demo.error} />
-      {!scene ? (
-        <Empty className="min-h-80 border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Film />
-            </EmptyMedia>
-            <EmptyTitle>{statusLabels[demo.status]}</EmptyTitle>
-            <EmptyDescription>
-              {demo.status === "failed"
-                ? "Die Datei konnte nicht verarbeitet werden. Lade bei Bedarf eine neue vollständige Demo hoch."
-                : "Du kannst diese Seite geöffnet lassen. Der Fortschritt wird automatisch aktualisiert."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <>
-          <div className="demo-scope">
-            <div className="demo-ribbon" aria-label="Runden auswählen">
-              {demo.summary.rounds.map((entry, at) => {
-                const scored = demo.summary.rounds.some((r) => r.winner);
-                const until = demo.summary.rounds.slice(0, at + 1);
-                const label = roundBreak(
-                  entry.number,
-                  demo.summary.rounds.length,
-                );
-                const economy = (["t", "ct"] as const)
-                  .filter((side) => entry.economy?.[side])
-                  .map((side) => `${side.toUpperCase()}: ${buyLabel(entry.economy![side]!.buy)}`)
-                  .join(", ");
-                return (
-                  <Fragment key={entry.id}>
-                    <button
-                      type="button"
-                      className="demo-ribbon-round"
-                      data-side={sideKey(entry.winner)}
-                      aria-pressed={round.id === entry.id}
-                      data-economy={hasEconomy || undefined}
-                      data-dimmed={!buyMatches(entry) || undefined}
-                      aria-label={`Runde ${entry.number}${entry.winner === 2 ? ", T gewinnt" : entry.winner === 3 ? ", CT gewinnt" : ""}${economy ? `, ${economy}` : ""}`}
-                      title={economy ? `Runde ${entry.number} · ${economy}` : undefined}
-                      onClick={() => setParams({ round: entry.id })}
-                    >
-                      {hasEconomy && (
-                        <span className="demo-ribbon-eco" aria-hidden="true">
-                          {(["t", "ct"] as const).map((side) => (
-                            <i
-                              key={side}
-                              data-side={side}
-                              data-buy={entry.economy?.[side]?.buy}
-                              style={{
-                                height: `${Math.max(8, Math.min(100, ((entry.economy?.[side]?.equipment || 0) / 25000) * 100))}%`,
-                              }}
-                            />
-                          ))}
-                        </span>
-                      )}
-                      <span>{entry.number}</span>
-                    </button>
-                    {label && (
-                      <span className="demo-ribbon-break" aria-hidden="true">
-                        {scored && (
-                          <strong>
-                            <span data-side="t">
-                              {until.filter((r) => r.winner === 2).length}
-                            </span>
-                            {" : "}
-                            <span data-side="ct">
-                              {until.filter((r) => r.winner === 3).length}
-                            </span>
-                          </strong>
-                        )}
-                        {label}
-                      </span>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {demo.summary.rounds.some((r) => r.winner) && (
-                <span className="demo-ribbon-legend" aria-hidden="true">
-                  <span data-side="t">T gewinnt</span>
-                  <span data-side="ct">CT gewinnt</span>
-                </span>
-              )}
-            </div>
-            {hasEconomy && (
-              <div className="demo-buy-filter" aria-label="Runden nach Buy filtern">
-                {(["t", "ct"] as const).map((side) => (
-                  <Choice
-                    key={side}
-                    label={`${side.toUpperCase()}-Buy`}
-                    value={buyFilter[side]}
-                    options={[
-                      { value: "", label: "Alle Buys" },
-                      ...economyOptions.map((option) => ({ value: option.value, label: option.label })),
-                    ]}
-                    onChange={(value) => setBuyFilter({ ...buyFilter, [side]: value })}
-                  />
-                ))}
-                <p>
-                  {demo.summary.rounds.filter(buyMatches).length} von {demo.summary.rounds.length} Runden ·
-                  Buy-Typ automatisch aus dem Ausrüstungswert nach dem Kauf erkannt
-                </p>
-              </div>
-            )}
-            <div className="demo-analysis-grid">
-              <div>
-                <DemoPlayer
-                  key={`${demo.id}:${round.id}:${from}:${to}`}
-                  scene={scene}
-                  maps={maps}
-                  range={{ start: start ?? from, end: end ?? to }}
-                  onPosition={(value, focusId) => {
-                    position.current = value;
-                    selectedFocus.current = focusId;
-                  }}
-                />
-              </div>
-              <aside className="flex flex-col gap-4">
-                <section className="demo-panel" aria-labelledby="scene-panel">
-                  <header>
-                    <h2 id="scene-panel">Szene festhalten</h2>
-                    <p>
-                      Setze Anfang und Ende an der aktuellen Wiedergabeposition.
-                      Der markierte Bereich erscheint auf der Zeitleiste.
-                    </p>
-                  </header>
-                  <div className="demo-panel-body">
-                    <div className="demo-markers">
-                      <label className="demo-marker">
-                        <span>Anfang</span>
-                        <output htmlFor="scene-start">
-                          {demoTime(start ?? from)}
-                        </output>
-                        <input
-                          id="scene-start"
-                          type="number"
-                          aria-label="Anfang in Sekunden"
-                          min={from}
-                          max={to}
-                          step="0.1"
-                          value={Math.round((start ?? from) * 10) / 10}
-                          onChange={(event) =>
-                            setStart(Number(event.target.value))
-                          }
-                        />
-                      </label>
-                      <span className="demo-marker-arrow" aria-hidden="true">
-                        <strong>
-                          {demoTime(
-                            Math.max(0, (end ?? to) - (start ?? from)),
-                          )}
-                        </strong>
-                        Dauer
-                      </span>
-                      <label className="demo-marker">
-                        <span>Ende</span>
-                        <output htmlFor="scene-end">
-                          {demoTime(end ?? to)}
-                        </output>
-                        <input
-                          id="scene-end"
-                          type="number"
-                          aria-label="Ende in Sekunden"
-                          min={from}
-                          max={to}
-                          step="0.1"
-                          value={Math.round((end ?? to) * 10) / 10}
-                          onChange={(event) =>
-                            setEnd(Number(event.target.value))
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="demo-marker-set">
-                      <Button
-                        variant="outline"
-                        onClick={() => setStart(position.current)}
-                      >
-                        Anfang hier
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setEnd(position.current)}
-                      >
-                        Ende hier
-                      </Button>
-                    </div>
-                    {canPrepare ? (
-                      <Button
-                        disabled={(end ?? to) <= (start ?? from)}
-                        onClick={() =>
-                          setSave({
-                            ...scene,
-                            focusId: selectedFocus.current,
-                            start: start ?? from,
-                            end: end ?? to,
-                          })
-                        }
-                      >
-                        <Plus data-icon="inline-start" />
-                        Zum Team-Review
-                      </Button>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        {demo.teamId
-                          ? "Owner und Captains bereiten die gemeinsamen Reviews vor."
-                          : "Gib die Demo für dein Team frei, um sie in einen gemeinsamen Review aufzunehmen."}
-                      </p>
-                    )}
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        const next = new URLSearchParams({
-                          round: round.id,
-                          start: String(start ?? from),
-                          end: String(end ?? to),
-                          focus: selectedFocus.current,
-                        });
-                        setParams(next);
-                      }}
-                    >
-                      Nur diesen Ausschnitt abspielen
-                    </Button>
-                  </div>
-                </section>
-                <section className="demo-panel" aria-labelledby="match-panel">
-                  <header>
-                    <h2 id="match-panel">Aufstellung</h2>
-                    <p>
-                      {demo.summary.players.length} Spieler ·{" "}
-                      {demo.summary.rounds.length} Runden · Nummern wie auf
-                      der Karte
-                    </p>
-                  </header>
-                  <div className="demo-panel-body">
-                    <ol className="demo-roster-list">
-                      {demo.summary.players.map((player, index) => (
-                        <li key={player.id}>
-                          <span>{index + 1}</span>
-                          <span>{player.name}</span>
-                        </li>
-                      ))}
-                    </ol>
-                    {demo.summary.warnings.map((warning) => (
-                      <p key={warning} className="demo-warning">
-                        {warning}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              </aside>
-            </div>
-          </div>
-        </>
-      )}
       {save && (
         <SaveScene scene={save} demo={demo} onClose={() => setSave(null)} />
       )}
+      <ConfirmAction
+        title="Demo löschen"
+        description="Die Datei und ihre Analyse werden gelöscht. Verknüpfte Reviews und Strats müssen vorher entfernt werden."
+        open={remove}
+        onOpenChange={setRemove}
+        onConfirm={removeDemo}
+      />
       <Dialog
         open={share}
         onOpenChange={(open) => {
@@ -1157,6 +905,269 @@ export function DemoPage({ maps }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+  if (!scene)
+    return (
+      <>
+        <WorkspaceHeader
+          title={demo.title}
+          description={`${sourceLabels[demo.source]} · ${owner}`}
+        >
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link to="/analysis">Alle Matches</Link>
+            </Button>
+            {demo.canEdit && (
+              <ConfirmAction
+                title="Demo löschen"
+                description="Die Datei und ihre Analyse werden gelöscht. Verknüpfte Reviews und Strats müssen vorher entfernt werden."
+                onConfirm={removeDemo}
+              >
+                <Trash2 />
+                Löschen
+              </ConfirmAction>
+            )}
+          </div>
+        </WorkspaceHeader>
+        <Feedback error={resource.error || demo.error} />
+        <Empty className="min-h-80 border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Film />
+            </EmptyMedia>
+            <EmptyTitle>{statusLabels[demo.status]}</EmptyTitle>
+            <EmptyDescription>
+              {demo.status === "failed"
+                ? "Die Datei konnte nicht verarbeitet werden. Lade bei Bedarf eine neue vollständige Demo hoch."
+                : "Du kannst diese Seite geöffnet lassen. Der Fortschritt wird automatisch aktualisiert."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </>
+    );
+  const warnings = demo.summary.warnings;
+  const actions = !!canPrepare || canShare;
+  const mapName =
+    maps.find((map) => map.mapName === demo.summary.map)?.name ||
+    demo.summary.map;
+  const header = (
+    <div className="demo-theater-heading">
+      <div className="demo-theater-head">
+        <Link
+          to="/analysis"
+          className="demo-theater-icon"
+          aria-label="Alle Matches"
+          title="Alle Matches"
+        >
+          <ArrowLeft aria-hidden="true" />
+        </Link>
+        <div className="demo-theater-title">
+          <h1 title={demo.title}>{demo.title}</h1>
+          <p className="demo-eyebrow">
+            <strong>{mapName}</strong>
+            <i>·</i>
+            <span>{sourceLabels[demo.source]}</span>
+            <i>·</i>
+            <span>{owner}</span>
+          </p>
+        </div>
+        {(actions || demo.canEdit || warnings.length > 0) && (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="demo-theater-icon"
+                aria-label={warnings.length ? "Aktionen und Hinweise" : "Aktionen"}
+                title={warnings.length ? "Aktionen und Hinweise" : "Aktionen"}
+                data-alert={warnings.length > 0 || undefined}
+              >
+                <Ellipsis aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              {canPrepare && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    setSave({ ...scene, focusId: selectedFocus.current })
+                  }
+                >
+                  <Plus />
+                  {section ? "Ausschnitt" : `Runde ${round.number}`} zum
+                  Team-Review
+                </DropdownMenuItem>
+              )}
+              {canShare && (
+                <DropdownMenuItem onSelect={() => setShare(true)}>
+                  <Share2 />
+                  Für Team freigeben
+                </DropdownMenuItem>
+              )}
+              {demo.canEdit && (
+                <>
+                  {actions && <DropdownMenuSeparator />}
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => setRemove(true)}
+                  >
+                    <Trash2 />
+                    Demo löschen
+                  </DropdownMenuItem>
+                </>
+              )}
+              {warnings.length > 0 && (
+                <>
+                  {(actions || demo.canEdit) && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel>Hinweise zur Analyse</DropdownMenuLabel>
+                  {warnings.map((warning) => (
+                    <p key={warning} className="demo-theater-note">
+                      {warning}
+                    </p>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      {section && (
+        <button
+          type="button"
+          className="demo-chip demo-theater-section"
+          aria-label={`Ausschnitt ${demoTime(from)} bis ${demoTime(to)} verlassen und ganze Runde zeigen`}
+          title="Ganze Runde zeigen"
+          onClick={() => openRound(round.id)}
+        >
+          Ausschnitt {demoTime(from)} bis {demoTime(to)}
+          <X aria-hidden="true" />
+        </button>
+      )}
+      <Feedback error={resource.error} />
+    </div>
+  );
+  const filtered = !!(buyFilter.t || buyFilter.ct);
+  const rounds = (
+    <div className="demo-theater-rounds">
+      <div className="demo-ribbon" role="group" aria-label="Runden auswählen">
+        {demo.summary.rounds.map((entry, at) => {
+          const scored = demo.summary.rounds.some((r) => r.winner);
+          const until = demo.summary.rounds.slice(0, at + 1);
+          const label = roundBreak(entry.number, demo.summary.rounds.length);
+          const economy = (["t", "ct"] as const)
+            .filter((side) => entry.economy?.[side])
+            .map((side) => `${side.toUpperCase()}: ${buyLabel(entry.economy![side]!.buy)}`)
+            .join(", ");
+          return (
+            <Fragment key={entry.id}>
+              <button
+                type="button"
+                className="demo-ribbon-round"
+                data-side={sideKey(entry.winner)}
+                aria-pressed={round.id === entry.id}
+                data-economy={hasEconomy || undefined}
+                data-dimmed={!buyMatches(entry) || undefined}
+                aria-label={`Runde ${entry.number}${entry.winner === 2 ? ", T gewinnt" : entry.winner === 3 ? ", CT gewinnt" : ""}${economy ? `, ${economy}` : ""}`}
+                title={`Runde ${entry.number}${entry.winner === 2 ? " · T gewinnt" : entry.winner === 3 ? " · CT gewinnt" : ""}${economy ? ` · ${economy}` : ""}`}
+                onClick={() => openRound(entry.id)}
+              >
+                {hasEconomy && (
+                  <span className="demo-ribbon-eco" aria-hidden="true">
+                    {(["t", "ct"] as const).map((side) => (
+                      <i
+                        key={side}
+                        data-side={side}
+                        data-buy={entry.economy?.[side]?.buy}
+                        style={{
+                          height: `${Math.max(8, Math.min(100, ((entry.economy?.[side]?.equipment || 0) / 25000) * 100))}%`,
+                        }}
+                      />
+                    ))}
+                  </span>
+                )}
+                <span>{entry.number}</span>
+              </button>
+              {label && (
+                <span className="demo-ribbon-break" aria-hidden="true">
+                  {scored && (
+                    <strong>
+                      <span data-side="t">
+                        {until.filter((r) => r.winner === 2).length}
+                      </span>
+                      {" : "}
+                      <span data-side="ct">
+                        {until.filter((r) => r.winner === 3).length}
+                      </span>
+                    </strong>
+                  )}
+                  {label}
+                </span>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+      {hasEconomy && (
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="demo-theater-icon"
+              aria-label={filtered ? "Buy-Filter aktiv, ändern" : "Runden nach Buy filtern"}
+              title="Runden nach Buy filtern"
+              data-active={filtered || undefined}
+            >
+              <ListFilter aria-hidden="true" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            {(["t", "ct"] as const).map((side) => (
+              <DropdownMenuGroup key={side}>
+                <DropdownMenuLabel>{side.toUpperCase()}-Buy</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={buyFilter[side] || "all"}
+                  onValueChange={(value) =>
+                    setBuyFilter((current) => ({
+                      ...current,
+                      [side]: value === "all" ? "" : value,
+                    }))
+                  }
+                >
+                  {[{ value: "all", label: "Alle Buys" }, ...economyOptions].map(
+                    (option) => (
+                      <DropdownMenuRadioItem
+                        key={option.value}
+                        value={option.value}
+                        onSelect={(event) => event.preventDefault()}
+                      >
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ),
+                  )}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+              </DropdownMenuGroup>
+            ))}
+            <p className="demo-theater-note">
+              {demo.summary.rounds.filter(buyMatches).length} von{" "}
+              {demo.summary.rounds.length} Runden · Buy-Typ automatisch aus dem
+              Ausrüstungswert nach dem Kauf erkannt
+            </p>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+  return (
+    <>
+      <DemoPlayer
+        scene={scene}
+        maps={maps}
+        theater={{ header, rounds }}
+        onPosition={(_, focusId) => {
+          selectedFocus.current = focusId;
+        }}
+      />
+      {dialogs}
     </>
   );
 }
@@ -1378,8 +1389,8 @@ export function ReviewPage({ user, maps }: Props) {
             </EmptyMedia>
             <EmptyTitle>Die erste Szene fehlt noch</EmptyTitle>
             <EmptyDescription>
-              Öffne ein Team-Match, markiere einen Abschnitt und füge ihn diesem
-              Review hinzu.
+              Öffne ein Team-Match und füge die gewünschte Runde über das
+              Aktionsmenü neben dem Titel diesem Review hinzu.
             </EmptyDescription>
           </EmptyHeader>
           <Button asChild>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Crosshair, RefreshCw } from "lucide-react";
 import { lineupCamera, VERTICAL_FOV_DEGREES } from "../../../shared/map-scene";
-import { acquireMapScene, createSky, floorBelow, viewExposure, type MapSceneInfo } from "../lib/map-scene";
+import { acquireMapScene, floorBelow, mountMapScene, viewExposure, type MapSceneInfo } from "../lib/map-scene";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
 import { Kbd } from "./ui/kbd";
@@ -63,18 +63,10 @@ export default function LineupPov({ nade, mapName, mapLabel }: { nade: any; mapN
         return;
       }
       if (disposed) return;
-      let renderer: THREE.WebGLRenderer;
-      try { renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current!, antialias: true, powerPreference: "high-performance" }); }
+      let mounted: ReturnType<typeof mountMapScene>;
+      try { mounted = mountMapScene(canvasRef.current!, loaded); }
       catch { setPhase({ kind: "unsupported" }); return; }
-      renderer.toneMapping = THREE.NeutralToneMapping;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      const sky = createSky();
-      const scene = new THREE.Scene();
-      scene.background = sky;
-      scene.add(new THREE.HemisphereLight(0xdde8ff, 0x8a7560, 1.1));
-      const sun = new THREE.DirectionalLight(loaded.sunColor, 1.4);
-      sun.position.copy(loaded.sunDirection).multiplyScalar(-1);
-      scene.add(sun, loaded.root);
+      const { renderer, scene } = mounted;
 
       const placed = lineupCamera(nade, floorBelow(loaded.root, camera.position))!;
       const view = new THREE.PerspectiveCamera(VERTICAL_FOV_DEGREES, 16 / 9, 0.05, 3000);
@@ -190,9 +182,7 @@ export default function LineupPov({ nade, mapName, mapLabel }: { nade: any; mapN
         window.removeEventListener("blur", unzoom);
         for (const [type, listener] of [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up], ["keydown", key], ["webglcontextlost", lost]] as const)
           canvas.removeEventListener(type, listener as EventListener);
-        scene.remove(loaded.root);
-        sky.dispose();
-        renderer.dispose();
+        mounted.dispose();
         resetRef.current = () => {};
         redrawRef.current = () => {};
       };

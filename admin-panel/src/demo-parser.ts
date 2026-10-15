@@ -5,7 +5,7 @@ import {
   parseTicks,
 } from "@laihoe/demoparser2";
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   AFTER_ROUND_LIMIT,
   ANALYSIS_VERSION,
@@ -19,6 +19,7 @@ import {
   type RoundReplay,
   type GrenadePath,
 } from "../shared/demos.js";
+import { INSIGHTS_VERSION, roundInsights, type DemoInsights } from "../shared/demo-insights.js";
 
 export const PARSER_VERSION = "0.42.0";
 const TICK_RATE = 64;
@@ -160,6 +161,9 @@ export async function parseDemo(
       "Y",
       "Z",
       "yaw",
+      "pitch",
+      "duck_amount",
+      "is_scoped",
       "health",
       "team_num",
       "active_weapon_name",
@@ -205,6 +209,10 @@ export async function parseDemo(
       y: row.Y,
       z: row.Z,
       yaw: row.yaw,
+      // The 3D view needs where players look and how low their eyes are; two decimals are enough.
+      ...(finite(row.pitch) && { pitch: Math.round(row.pitch * 100) / 100 }),
+      ...(finite(row.duck_amount) && row.duck_amount > 0 && { duck: Math.round(Math.min(1, row.duck_amount) * 100) / 100 }),
+      ...(row.is_scoped === true && { scoped: true }),
       health: Math.max(0, row.health),
       side: row.team_num,
       weapon: String(row.active_weapon_name || "").slice(0, 80),
@@ -255,6 +263,7 @@ export async function parseDemo(
     grenadeByRound.set(round.id, paths);
   }
   await mkdir(output, { recursive: true });
+  const insights: DemoInsights["rounds"] = [];
   for (const round of rounds) {
     const replay: RoundReplay = {
       round,
@@ -325,6 +334,7 @@ export async function parseDemo(
     if (economy.t || economy.ct) round.economy = economy;
     replay.round = publicRound(round);
     await writeFile(join(output, `${round.id}.json`), JSON.stringify(replay));
+    insights.push(roundInsights(replay));
   }
   const summary: DemoSummary = {
     version: ANALYSIS_VERSION,
@@ -336,6 +346,11 @@ export async function parseDemo(
     warnings,
   };
   await writeFile(join(output, "summary.json"), JSON.stringify(summary));
+  // Opponent reports compare many demos; this compact copy spares them reading every round.
+  // The folder is named after the demo.
+  await writeFile(join(output, "insights.json"), JSON.stringify({
+    version: INSIGHTS_VERSION, demoId: basename(output), map: summary.map, players: summary.players, rounds: insights,
+  } satisfies DemoInsights));
   return summary;
 }
 

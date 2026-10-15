@@ -13,6 +13,7 @@ import { installWorkspace } from "./workspace-routes.js";
 import { installDemoAnalysis } from "./demo-routes.js";
 import { installRecordings } from "./recording-routes.js";
 import { installMatches } from "./match-routes.js";
+import { installOpponents } from "./opponents.js";
 import {
   nadesToMatchZySavedNadesConfig,
   sanitizeAdmins,
@@ -98,6 +99,7 @@ export function createApp({ config, store, compose, nadesSync, restartScheduler 
   installAuth(app, { config, store, loginLimiter, steamVerifier, live });
   installWorkspace(app, { store, config, live });
   installDemoAnalysis(app, { store, live });
+  installOpponents(app, { store });
   installRecordings(app, { store, live, config });
   installMatches(app, { store, live });
 

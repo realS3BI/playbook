@@ -7,6 +7,7 @@ import { AnalysisPage, DemoPage, ReviewPage } from "./components/analysis-pages"
 import { LiveRecordingStatus } from "./components/live-recording-status";
 import { LiveSessionsPage, LiveSessionPage } from "./components/live-session-pages";
 import { MatchImportsPage, PrematchesPage, PrematchPage } from "./components/match-preparation-pages";
+import { OpponentPage, OpponentsPage } from "./components/opponent-pages";
 import { StratsPage, StratPage, StratEditor, LiveStratSettingsPage } from "./components/strats-page";
 import { RolesPage } from "./components/roles-page";
 import { MapScenesPage } from "./components/map-scenes-page";
@@ -221,7 +222,7 @@ function Shell({ user, children, tab, onLogout, dirty, busy, onSave, onApply, op
   const livePage = path === "/strats/live" || path.startsWith("/strats/live/");
   const immersive = livePage || /^\/strats\/control\/[^/]+$/.test(path);
   const workspacePage = tab === "teams" ? (path === "/teams" ? "Meine Teams" : path.includes("/join/") ? "Einladung" : "Mitglieder")
-    : tab === "strats" ? (livePage ? "Live" : path.startsWith("/strats/control") ? "Live verwalten" : path.endsWith("/edit") ? "Editor" : path.endsWith("/new") ? "Neue Strat" : path === "/strats" ? "Bibliothek" : "Aufgaben") : tab === "analysis" ? (path.includes("/reviews/") ? "Team-Review" : path.includes("/demos/") ? "Matchanalyse" : "Matches und Reviews") : "";
+    : tab === "strats" ? (livePage ? "Live" : path.startsWith("/strats/control") ? "Live verwalten" : path.endsWith("/edit") ? "Editor" : path.endsWith("/new") ? "Neue Strat" : path === "/strats" ? "Bibliothek" : "Aufgaben") : tab === "analysis" ? (path.includes("/reviews/") ? "Team-Review" : path.includes("/demos/") ? "Matchanalyse" : path.startsWith("/analysis/opponents") ? "Gegner" : "Matches und Reviews") : "";
   const currentPage = workspacePage || (reviewing ? "Review" : selectedNade?.displayName || selectedNade?.name || selectedMap?.name || (tab === "maps" ? "Alle Maps" : activeTab.label));
   const serverActions = authorize(user, "server.match") && activeTab.group === "Server" ? <>
     {dirty && <span className="workspace-navigation-note">Ungespeicherte Änderungen</span>}
@@ -961,6 +962,8 @@ function App() {
         <Route path="/analysis/imports" element={<MatchImportsPage user={user} maps={libraryMaps} />} />
         <Route path="/analysis/prematch" element={<PrematchesPage user={user} maps={libraryMaps} />} />
         <Route path="/analysis/prematch/:preparationId" element={<PrematchPage user={user} maps={libraryMaps} />} />
+        <Route path="/analysis/opponents" element={<OpponentsPage user={user} maps={libraryMaps} />} />
+        <Route path="/analysis/opponents/view" element={<OpponentPage user={user} maps={libraryMaps} />} />
         <Route path="/analysis/demos/:demoId" element={<DemoPage user={user} maps={libraryMaps} />} />
         <Route path="/analysis/reviews/:reviewId" element={<ReviewPage user={user} maps={libraryMaps} />} />
         <Route path="/teams" element={<TeamsPage user={user} />} />

@@ -658,7 +658,9 @@ export class MatchStore {
       observations: any[] = [];
     let exact = 0,
       partial = 0,
-      analyzed = 0;
+      analyzed = 0,
+      // Steam IDs of the confirmed five open the opponent analysis across their demos.
+      opponentSteamIds: string[] = [];
     for (const match of entries) {
       if (
         preparation.competitionSource &&
@@ -693,6 +695,10 @@ export class MatchStore {
         partial += overlap > 0 ? 1 : 0;
       }
       if (!side || preparation.roster.length !== 5) continue;
+      if (!opponentSteamIds.length)
+        opponentSteamIds = match.players
+          .filter((p) => side.roster.includes(p.id) && p.steamId)
+          .map((p) => p.steamId);
       const demo = match.demoId
         ? await this.analysis.demo(match.demoId, actor).catch(() => null)
         : null;
@@ -762,6 +768,7 @@ export class MatchStore {
       maps: [...maps.values()],
       observations,
       coverage: { found: entries.length, exact, partial, analyzed },
+      steamRoster: opponentSteamIds,
       canEdit: authorize(actor, "analysis.scout", team),
     };
   }

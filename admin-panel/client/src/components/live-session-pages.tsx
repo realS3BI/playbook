@@ -67,6 +67,7 @@ export function AnalysisNav() {
         ["/analysis", "Demos"],
         ["/analysis/live", "Live"],
         ["/analysis/prematch", "Prematch"],
+        ["/analysis/opponents", "Gegner"],
         ["/analysis/imports", "Matchimporte"],
       ].map(([url, label]) => (
         <Button key={url} asChild variant="outline" size="sm">

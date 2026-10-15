@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Check, Download, Link2, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, Download, Flame, Link2, RefreshCw, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Actor } from "../../../shared/authorization";
 import { isPlatformAdmin } from "../../../shared/authorization";
@@ -31,6 +31,7 @@ import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "./ui/empty";
 import { Choice, Feedback, useResource, WorkspaceHeader } from "./workspace-ui";
 import { AnalysisNav } from "./live-session-pages";
 import { SceneExample } from "./demo-player";
+import { opponentLink } from "./opponent-pages";
 import { DemoFolderImport } from "./demo-folder-import";
 type Props = { user: Actor; maps: MapDefinition[] };
 const size = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(2)} GiB`;
@@ -886,6 +887,14 @@ export function PrematchPage({ maps }: Props) {
         <Badge variant="secondary">
           {report.coverage.exact} Matches mit bestätigtem Fünfer
         </Badge>
+        {report.steamRoster?.length > 0 && (
+          <Button asChild variant="outline" size="sm">
+            <Link to={opponentLink(report.steamRoster)}>
+              <Flame data-icon="inline-start" />
+              Heatmaps und Tendenzen
+            </Link>
+          </Button>
+        )}
       </WorkspaceHeader>
       <AnalysisNav />
       <Feedback error={error || preparation.error} />

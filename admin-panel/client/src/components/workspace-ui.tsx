@@ -91,14 +91,21 @@ export function ConfirmAction({
   onConfirm,
   disabled = false,
   children,
+  open: controlled,
+  onOpenChange,
 }: {
   title: string;
   description: string;
   onConfirm: () => Promise<unknown>;
   disabled?: boolean;
-  children: ReactNode;
+  /** Content of the trigger button; without it the dialog is opened from outside through `open`. */
+  children?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = controlled ?? own;
+  const setOpen = onOpenChange ?? setOwn;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -111,11 +118,13 @@ export function ConfirmAction({
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
-          {children}
-        </Button>
-      </DialogTrigger>
+      {children && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" disabled={disabled}>
+            {children}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

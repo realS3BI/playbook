@@ -29,7 +29,7 @@ Lineup-Daten werden zwischen MongoDB und der gemeinsamen `savednades.json` synch
 
 ## Abwurfsicht
 
-Der Dienst `map-scenes` liest die Map-Archive aus dem CS2-Volume und exportiert für jede Active-Duty-Map und jede weitere Map mit Lineups eine verkleinerte glTF-Szene samt Lightmap ins Upload-Volume. Die API nennt unter `/api/map-scenes/<map>` die aktuelle Datei. Die Lineup-Seite lädt three.js erst, wenn jemand den Tab „Abwurfsicht“ öffnet, und rendert die Map aus `lineupPos` und `lineupAng`. Betrieb und Grenzen stehen in [Betrieb](operations.md#abwurfsicht).
+Der Dienst `map-scenes` liest die Map-Archive aus dem CS2-Volume und exportiert für jede Active-Duty-Map und jede weitere Map mit Lineups eine verkleinerte glTF-Szene samt Lightmap ins Upload-Volume. Die API nennt unter `/api/map-scenes/<map>` die aktuelle Datei. Die Lineup-Seite lädt three.js erst, wenn jemand den Tab „Abwurfsicht“ öffnet, und rendert die Map aus `lineupPos` und `lineupAng`. Die 3D-Ansicht des Demo-Players nutzt dieselben Szenen und lädt three.js ebenfalls erst beim Umschalten auf 3D. Betrieb und Grenzen stehen in [Betrieb](operations.md#abwurfsicht).
 
 ## Eigenes Server-Plugin
 
