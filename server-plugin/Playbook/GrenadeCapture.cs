@@ -46,12 +46,16 @@ public sealed partial class PlaybookPlugin
                     var angles = new Coordinates(pawn.EyeAngles.X, pawn.EyeAngles.Y, pawn.EyeAngles.Z);
                     var samples = _saveSamples.GetValueOrDefault(player.Slot) ?? [];
                     AddSample(samples, player, pawn);
+                    var motion = ThrowMotion.Analyze(samples);
+                    // Anlauf and jumpthrows are loaded where the player stood and aimed, not where the grenade left.
+                    if (motion is { Setup.Found: true } && motion.Setup.Index != samples.Count - 1)
+                        (start, angles) = (motion.Setup.Position, motion.Setup.View);
                     var trace = ThrowTechnique.Serialize(samples);
                     var owner = player.SteamID.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     _capture.Forget(player.Slot);
                     var draft = new NadeLineup(owner, $"capture_{Guid.NewGuid():N}", Server.MapName,
                         kind, "", start, angles, "", trace, Team: player.TeamNum switch { 3 => "ct", 2 => "t", _ => "" },
-                        Attributes: ThrowAttributes.Detect(samples));
+                        Attributes: motion?.Attributes ?? new());
                     _capture.Arm(player.Slot, player.SteamID, draft, Server.CurrentTime);
                     _capture.Thrown(player.Slot, player.SteamID, kind, Server.CurrentTime);
                     _saveSamples.Remove(player.Slot);
@@ -299,12 +303,13 @@ public sealed partial class PlaybookPlugin
             { ClearCapture(player.Slot); Tell(player, "Die Flugzeit konnte nicht eindeutig erfasst werden. Bitte die Aufnahme erneut starten und genau eine Granate werfen."); return HookResult.Continue; }
             var samples = System.Text.Json.JsonSerializer.Deserialize<ThrowSample[]>(lineup.ThrowTrace) ?? [];
             var technique = ThrowTechnique.Summarize(samples);
+            var steps = ThrowMotion.Analyze(samples)?.Describe(lineup.Attributes);
             _draftNameRequests[player.Slot] = new(lineup.Owner, lineup.Kind, lineup.Map,
                 lineup.Position, lineup.Angles, target, technique, lineup.ThrowTrace,
                 lineup.Attributes ?? ThrowAttributes.Detect(samples), lineup.Team, measured,
                 _captureEdits.Remove(player.Slot, out var original) ? original : null);
             var duration = FormattableString.Invariant($" Flugzeit: {measured:0.00} s.");
-            Tell(player, $"Ziel erfasst: {technique}.{duration} Panelbedienung aktivieren und unter " +
+            Tell(player, $"Ziel erfasst: {steps?.Summary ?? technique}.{duration} Panelbedienung aktivieren und unter " +
                 (original != null ? "Lineup bearbeiten die Neuaufnahme speichern oder verwerfen." : "Neue Nade aufnehmen die Aufnahme speichern oder verwerfen. Optional einen eigenen Namen im Chat eingeben."));
             return HookResult.Continue;
         }

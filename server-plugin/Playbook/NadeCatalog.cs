@@ -24,7 +24,7 @@ public sealed record NadeLineup(string Owner, string Name, string Map, NadeKind 
     string Description, Coordinates Position, Coordinates Angles, string DisplayName = "", string ThrowTrace = "", bool MustKnow = false,
     bool Official = false, string ReviewStatus = "", string Revision = "", string Team = "", string ThrowFromTitle = "",
     string ThrowToTitle = "", string Technique = "", ThrowAttributes? Attributes = null, float? FlightDuration = null, string[]? ReviewMediaSlots = null,
-    Coordinates? LandingPosition = null)
+    Coordinates? LandingPosition = null, string[]? ThrowSteps = null)
 {
     public string Title => string.IsNullOrWhiteSpace(DisplayName) ? Name : DisplayName;
 }
@@ -77,6 +77,7 @@ public static class NadeCatalog
                         Technique = Field(title, "throwTechnique"), Attributes = Attributes(title) ?? result[index].Attributes,
                         FlightDuration = Duration(title),
                         LandingPosition = title.TryGetProperty("landingPos", out _) ? Point(title, "landingPos") : result[index].LandingPosition,
+                        ThrowSteps = Steps(title),
                         ReviewMediaSlots = title.TryGetProperty("reviewMediaSlots", out var slots) && slots.ValueKind == JsonValueKind.Array
                             ? slots.EnumerateArray().Where(s => s.ValueKind == JsonValueKind.String && ReviewCaptureFiles.Slots.Contains(s.GetString())).Select(s => s.GetString()!).Distinct().ToArray() : []
                     };
@@ -92,6 +93,11 @@ public static class NadeCatalog
     private static ThrowAttributes? Attributes(JsonElement data) => ThrowAttributes.Flags.Any(key => data.TryGetProperty(key, out _)) || data.TryGetProperty("click_type", out _)
         ? new ThrowAttributes(Flag(data, "is_jumpthrow"), Flag(data, "is_crouch"), Flag(data, "is_walking"), Flag(data, "is_running"), Flag(data, "is_stepping"),
             Field(data, "click_type") is "right" or "both" ? Field(data, "click_type") : "left").Normalize() : null;
+
+    // Lineup, movement and release instructions derived by the dashboard from the recorded trace.
+    private static string[]? Steps(JsonElement data) => data.TryGetProperty("throwSteps", out var steps) && steps.ValueKind == JsonValueKind.Array &&
+        steps.GetArrayLength() == 3 && steps.EnumerateArray().All(step => step.ValueKind == JsonValueKind.String)
+            ? steps.EnumerateArray().Select(step => MenuRenderer.Plain(step.GetString()!, 160)).ToArray() : null;
 
     private static float? Duration(JsonElement data) => data.TryGetProperty("flightDuration", out var value) &&
         value.ValueKind == JsonValueKind.Number && value.TryGetSingle(out var seconds) && float.IsFinite(seconds) && seconds >= 0 ? seconds : null;

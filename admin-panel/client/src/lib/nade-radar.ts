@@ -4,7 +4,7 @@ import { BUNDLED_RADAR_CALIBRATIONS } from "./bundled-radar-calibrations.js";
 type RadarProjection = { xScale: number; xOffset: number; yScale: number; yOffset: number };
 export type RadarCalibration = RadarProjection & { altitudeSplit?: number; lower?: RadarProjection };
 export type PositionedNade = {
-  lineupPos?: string; landingPos?: string;
+  lineupPos?: string; landingPos?: string; releasePos?: string;
   radarFrom?: RadarPoint | null; radarTo?: RadarPoint | null;
 };
 

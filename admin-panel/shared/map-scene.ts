@@ -23,8 +23,8 @@ export function sourceForward(pitch: number, yaw: number): Vector3 {
   return [Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), -Math.sin(p)];
 }
 
-// The plugin stores the origin at release, 4 units up and for jumpthrows mid-air. Loading the
-// lineup in game drops the player to the floor below, so the camera stands on that floor.
+// Lineups store the origin 4 units up where the player aims. Lineups without a recorded trace can
+// still sit mid-air (old jumpthrows); loading drops the player to the floor below, so the camera stands there.
 export const MAX_FLOOR_DROP = 128;
 
 // Camera where the lineup is aimed: on the floor (source z) when known, looking along the eye angles.

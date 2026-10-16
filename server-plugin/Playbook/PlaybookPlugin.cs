@@ -379,7 +379,7 @@ public sealed partial class PlaybookPlugin : BasePlugin
         RememberRecent(player, lineup);
         if (_menus.TryGetValue(player.Slot, out var session)) session.Library = null;
         ClearCapture(player.Slot);
-        Tell(player, $"Geladen: {lineup.Title}. {lineup.Description}" +
+        Tell(player, $"Geladen: {lineup.Title}. {(lineup.ThrowSteps is { Length: 3 } steps ? $"Ablauf: {string.Join(" → ", steps)}." : lineup.Description)}" +
             (lineup.Kind == NadeKind.Other ? " Passende Granate selbst wählen." : " Bereit zum Trainieren."));
     }
 

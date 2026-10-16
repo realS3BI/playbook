@@ -4,7 +4,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { isRadarPoint, type MapDefinition, type RadarPoint } from "../lib/maps";
 import { cn } from "../lib/utils";
-import { resolveRadarPoints, type RadarCalibration } from "../lib/nade-radar";
+import { resolveRadarPoints, worldToRadar, type RadarCalibration } from "../lib/nade-radar";
 import { radarCanvasSize, radarPointVisible, radarInputPoint, type RadarLevel } from "../lib/radar-layout";
 import { RadarBackground } from "./radar-background";
 import { RadarLevelSwitch } from "./radar-level-switch";
@@ -15,6 +15,7 @@ type RadarNade = {
   displayName?: string;
   lineupPos?: string;
   landingPos?: string;
+  releasePos?: string;
   type?: string;
   throwFromTitle?: string;
   throwToTitle?: string;
@@ -140,6 +141,12 @@ export function NadeFlightMap({
               radarTo: resolved.radarTo && radarPointVisible(map, resolved.radarTo, activeLevel) ? resolved.radarTo : null };
             const from = points.radarFrom ? pixelPoint(points.radarFrom, width, height) : null;
             const to = points.radarTo ? pixelPoint(points.radarTo, width, height) : null;
+            // After a run-up the grenade leaves elsewhere: feet path solid, flight dashed from the release spot.
+            const releasePoint = from && nade.releasePos ? worldToRadar(nade.releasePos, calibration) : null;
+            const release = releasePoint && radarPointVisible(map, releasePoint, activeLevel) ? releasePoint : null;
+            const releasePixel = release ? pixelPoint(release, width, height) : null;
+            const runUp = from && releasePixel && Math.hypot(releasePixel.x - from.x, releasePixel.y - from.y) > markerRadius * 1.5 ? releasePixel : null;
+            const flightFrom = runUp ? release! : points.radarFrom;
             const color = colorForType(nade.type);
             const markerId = TYPE_COLORS[nade.type || ""] ? `${markerPrefix}-${String(nade.type).toLowerCase()}` : `${markerPrefix}-other`;
             const title = `${nade.displayName || nade.name || `Nade ${index + 1}`}: ${nade.throwFromTitle || "Start"} → ${nade.throwToTitle || "Ziel"}`;
@@ -163,10 +170,17 @@ export function NadeFlightMap({
                 } : undefined}
               >
                 <title>{title}</title>
+                {from && runUp ? (
+                  <>
+                    <line className="radar-runup-halo" x1={from.x} y1={from.y} x2={runUp.x} y2={runUp.y} />
+                    <line className="radar-runup" x1={from.x} y1={from.y} x2={runUp.x} y2={runUp.y} />
+                    <circle className="radar-release" cx={runUp.x} cy={runUp.y} r={markerRadius * 0.35} />
+                  </>
+                ) : null}
                 {from && to ? (
                   <>
-                    <path className="radar-route-halo" d={flightPath(points.radarFrom!, points.radarTo!, width, height)} />
-                    <path className="radar-route-line" d={flightPath(points.radarFrom!, points.radarTo!, width, height)} markerEnd={`url(#${markerId})`} />
+                    <path className="radar-route-halo" d={flightPath(flightFrom!, points.radarTo!, width, height)} />
+                    <path className="radar-route-line" d={flightPath(flightFrom!, points.radarTo!, width, height)} markerEnd={`url(#${markerId})`} />
                   </>
                 ) : null}
                 {from ? (

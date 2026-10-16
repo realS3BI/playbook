@@ -12,6 +12,7 @@ import { TEAM_LABELS, isLineupTeam } from "../../../shared/lineup-teams";
 import { copyText } from "../lib/clipboard";
 import { CrosshairIcon, PhotoLineupGuide, useLineupGuide } from "./lineup-crosshair";
 import { CLICK_LABELS, MOVEMENT_LABELS, movementType } from "../../../shared/throw-attributes";
+import { ThrowSequence } from "./throw-sequence";
 
 export function CrosshairView({ nade, open, onOpenChange, className = "" }) {
   const [zoom, setZoom] = useState(3);
@@ -134,7 +135,7 @@ export function LineupDetail({ nade, map, back, onBack, management, children }) 
           {!nade.official && nade.reviewStatus === "pending" && <Badge variant="outline">Im Review</Badge>}
           {!nade.official && nade.reviewStatus === "rejected" && <Badge variant="outline">Überarbeitung angefragt</Badge>}
         </div>}
-        <section className="official-lineup-instructions" aria-label="Anleitung"><h2><GrenadeIcon type={nade.type} />So wirfst du dieses Lineup</h2><p className="official-lineup-route">{nade.throwFromTitle || "Startposition"} → {nade.throwToTitle || "Zielposition"}</p>{nade.desc && <p className="throw-description">{nade.desc}</p>}</section>
+        <section className="official-lineup-instructions" aria-label="Anleitung"><h2><GrenadeIcon type={nade.type} />So wirfst du dieses Lineup</h2><p className="official-lineup-route">{nade.throwFromTitle || "Startposition"} → {nade.throwToTitle || "Zielposition"}</p><ThrowSequence nade={nade} />{nade.desc && <p className="throw-description">{nade.desc}</p>}</section>
         <details className="official-lineup-management"><summary>Verwalten und Wurfdaten</summary><div>{management}</div></details>
       </aside>
     </div>

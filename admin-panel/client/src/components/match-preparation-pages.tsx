@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import type { Actor } from "../../../shared/authorization";
 import { isPlatformAdmin } from "../../../shared/authorization";
 import type { Demo } from "../../../shared/demos";
+import { parseMatchShareCode } from "../../../shared/matches";
 import type {
   Prematch,
   MatchConnection,
@@ -495,18 +496,20 @@ export function MatchImportsPage({ user }: Props) {
                           </a>
                         </Button>
                         <Field>
-                          <FieldLabel>Aktueller Match-Sharecode</FieldLabel>
+                          <FieldLabel>Aktueller Match-Sharecode oder Steam-Link</FieldLabel>
                           <Input
                             required
                             value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            placeholder="CSGO-…"
+                            onChange={(e) => setCode(parseMatchShareCode(e.target.value) ?? e.target.value)}
+                            placeholder="CSGO-… oder steam://rungame/730/…"
                           />
                           <FieldDescription>
                             Öffne in CS2 „Ansehen“ → „Deine Matches“, wähle ein
                             eigenes Match aus und kopiere über „Teilen“ den
                             Match-Sharecode. Füge den vollständigen Code mit
-                            „CSGO-“ am Anfang hier ein. Das Match darf höchstens
+                            „CSGO-“ am Anfang oder den Steam-Link mit
+                            „+csgo_download_match“ hier ein. Der Matchcode wird
+                            automatisch übernommen. Das Match darf höchstens
                             einen Monat alt sein und dient als Ausgangspunkt
                             für weitere Matches.
                           </FieldDescription>

@@ -20,10 +20,15 @@ public static class TrainingMenu
             var own = canWriteNades && n.Owner == steamId && n.Owner != "default" && !n.Official;
             var pending = n.ReviewStatus == "pending";
             var status = n.Official ? "Offiziell" : pending ? "Im Review" : "Aufnahme";
+            var steps = n.ThrowSteps is { Length: 3 } recorded ? recorded : null;
             var items = new List<MenuItem> {
-                new("Lineup laden & trainieren", "Teleportiert dich zum Abwurfpunkt, stellt die Blickrichtung ein und rüstet die passende Granate aus. Danach selbst werfen.", Request: new(TrainingAction.LoadLineup, n)),
+                new("Lineup laden & trainieren", "Teleportiert dich zum Lineup-Punkt, stellt die Blickrichtung ein und rüstet die passende Granate aus. Danach selbst werfen." +
+                    (steps != null ? $" Ablauf: {string.Join(" → ", steps)}." : ""), Request: new(TrainingAction.LoadLineup, n)),
                 new(settings.IsFavorite(n) ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen", "Speichert diese Granate in deiner persönlichen Favoritenliste für diese Map.", Request: new(TrainingAction.ToggleFavorite, n))
             };
+            if (steps != null) items.Add(new("Ablauf ansehen", $"{string.Join(" → ", steps)}.", Page: new("Ablauf", "Aus der Aufnahme erkannt: wo du ausrichtest, wie du dich bewegst und wann du loslässt.",
+                steps.Select((step, index) => new MenuItem($"{index + 1}. {step}", $"{new[] { "Lineup", "Bewegung", "Abwurf" }[index]}: {step}.", Enabled: false)).ToArray(),
+                Key: $"steps:{n.Owner}:{n.Map}:{n.Name}")));
             if (canWriteNades && !n.Official) items.Add(new("Medien-Review", "Vier Fotos und ein Video aufnehmen, anschließend prüfen und freigeben. Verbinde vorher das Spielbild auf der Lineup-Seite im Browser.", Page: ReviewMenu.Create(n, own)));
             if (own)
             {

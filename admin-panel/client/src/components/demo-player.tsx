@@ -149,6 +149,39 @@ export function DemoPlayer({
   const togglePlayback = useRef<(() => void) | null>(null);
   fullscreenRef.current = fullscreen;
   const [flying, setFlying] = useState(false);
+  // Pressing Ctrl on its own lays the minimap over the 3D view at full size; another press or Esc shrinks it.
+  // Ctrl together with another key or a click stays a shortcut and leaves the radar alone.
+  const [largeRadar, setLargeRadar] = useState(false);
+  const radarAvailable = useRef(false);
+  useEffect(() => {
+    let armed = false;
+    const down = (event: KeyboardEvent) => {
+      armed = event.key === "Control" && !event.repeat && !event.shiftKey && !event.altKey && !event.metaKey;
+      if (event.key === "Escape") setLargeRadar(false);
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.key !== "Control" || !armed) return;
+      armed = false;
+      const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement);
+      if (radarAvailable.current && !typing) setLargeRadar((large) => !large);
+    };
+    const cancel = () => {
+      armed = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("pointerdown", cancel);
+    window.addEventListener("blur", cancel);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("pointerdown", cancel);
+      window.removeEventListener("blur", cancel);
+    };
+  }, []);
   useEffect(() => {
     const update = () => {
       if (!document.fullscreenElement) setFullscreen(false);
@@ -287,6 +320,7 @@ export function DemoPlayer({
     else setLocal({ ...state, ...next, anchoredAt: serverNow() });
   }
   togglePlayback.current = null;
+  radarAvailable.current = false;
   const theaterTop = (clock?: ReactNode, tools?: ReactNode) =>
     theater && (
       <div className="demo-theater-top">
@@ -611,44 +645,11 @@ export function DemoPlayer({
   ) : (
     levelSwitch
   );
-  const stageBody = in3d ? (
-    <Suspense fallback={<div className="demo-3d" aria-busy="true" />}>
-      <DemoStage3d
-        mapName={data.demo.summary.map}
-        mapLabel={mapLabel}
-        replay={data.replay}
-        roster={data.demo.summary.players}
-        clock={timeSource}
-        focusId={state.focusId}
-        mode={camera}
-        onModeChange={setCamera}
-        xray={xray === "on"}
-        calibration={calibration}
-        pointer={pointer}
-        onPoint={onPoint}
-        onFocus={disabled ? undefined : (focusId) => change({ focusId })}
-        onCaptureChange={setFlying}
-      />
-    </Suspense>
-  ) : (
-    radarReady && (
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`${map.name}, Runde ${data.replay.round.number}, ${demoTime(time)}`}
-        onClick={(event) => {
-          if (!onPoint) return;
-          const matrix = event.currentTarget.getScreenCTM();
-          if (!matrix) return;
-          const p = new DOMPoint(
-            event.clientX,
-            event.clientY,
-          ).matrixTransform(matrix.inverse());
-          if (p.x >= 0 && p.y >= 0 && p.x <= width && p.y <= height)
-            onPoint({ x: p.x / width, y: p.y / height, level });
-        }}
-      >
-        <RadarBackground map={map} level={level} />
+  // Marks on the radar; the minimap in the 3D view draws the same scene smaller, so its marks are enlarged.
+  const radarMarks = (mini: boolean) => {
+    const k = mini ? 2.2 : 1;
+    return (
+      <>
         {effects.map((effect) => {
           const p = point(effect);
           return p && radarPointVisible(map, p, level) ? (
@@ -665,7 +666,7 @@ export function DemoPlayer({
             </circle>
           ) : null;
         })}
-        {data.replay.grenades.map((grenade) => {
+        {!mini && data.replay.grenades.map((grenade) => {
           const end = grenade.points.at(-1);
           if (
             !end ||
@@ -706,8 +707,8 @@ export function DemoPlayer({
               <title>
                 {{ dropped: "Bombe liegt", planted: "Bombe gelegt", defused: "Bombe entschärft", exploded: "Bombe explodiert" }[bomb.kind]}
               </title>
-              {bomb.kind === "planted" && <circle r={width * 0.022} className="demo-bomb-pulse" />}
-              <rect x={-width * 0.009} y={-width * 0.007} width={width * 0.018} height={width * 0.014} rx={3} />
+              {bomb.kind === "planted" && <circle r={width * 0.022 * k} className="demo-bomb-pulse" />}
+              <rect x={-width * 0.009 * k} y={-width * 0.007 * k} width={width * 0.018 * k} height={width * 0.014 * k} rx={3 * k} />
             </g>
           ) : null;
         })()}
@@ -718,7 +719,7 @@ export function DemoPlayer({
             (entry) => entry.id === player.id,
           );
           const name = data.demo.summary.players[index]?.name || player.id;
-          const size = width * 0.012;
+          const size = width * 0.012 * k;
           const focus = player.id === state.focusId;
           return (
             <g
@@ -745,12 +746,14 @@ export function DemoPlayer({
                     y2={
                       -Math.sin((player.yaw * Math.PI) / 180) * size * 2.3
                     }
-                    strokeWidth={5}
+                    strokeWidth={5 * k}
                   />
-                  <circle r={size} strokeWidth={focus ? 4 : 2} />
-                  <text textAnchor="middle" dy="0.35em" fontSize={size}>
-                    {index + 1}
-                  </text>
+                  <circle r={size} strokeWidth={(focus ? 4 : 2) * k} />
+                  {!mini && (
+                    <text textAnchor="middle" dy="0.35em" fontSize={size}>
+                      {index + 1}
+                    </text>
+                  )}
                   {bomb?.kind === "carried" && bomb.playerId === player.id && (
                     <rect
                       className="demo-bomb-carrier"
@@ -767,10 +770,10 @@ export function DemoPlayer({
               ) : (
                 <path
                   d={`M-${size},-${size} L${size},${size} M-${size},${size} L${size},-${size}`}
-                  strokeWidth={4}
+                  strokeWidth={4 * k}
                 />
               )}
-              {focus && (
+              {focus && !mini && (
                 <text
                   y={-size * 2.6}
                   textAnchor="middle"
@@ -783,7 +786,7 @@ export function DemoPlayer({
             </g>
           );
         })}
-        {pointer && pointer.level === level && now - pointer.at < 5000 && (
+        {!mini && pointer && pointer.level === level && now - pointer.at < 5000 && (
           <g
             className="demo-pointer"
             transform={`translate(${pointer.x * width},${pointer.y * height})`}
@@ -792,8 +795,69 @@ export function DemoPlayer({
             <path d="M-25,0 H25 M0,-25 V25" />
           </g>
         )}
+      </>
+    );
+  };
+  const stageBody = in3d ? (
+    <Suspense fallback={<div className="demo-3d" aria-busy="true" />}>
+      <DemoStage3d
+        mapName={data.demo.summary.map}
+        mapLabel={mapLabel}
+        replay={data.replay}
+        roster={data.demo.summary.players}
+        clock={timeSource}
+        focusId={state.focusId}
+        mode={camera}
+        onModeChange={setCamera}
+        xray={xray === "on"}
+        calibration={calibration}
+        pointer={pointer}
+        onPoint={onPoint}
+        onFocus={disabled ? undefined : (focusId) => change({ focusId })}
+        onCaptureChange={setFlying}
+      />
+    </Suspense>
+  ) : (
+    radarReady && (
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label={`${map.name}, Runde ${data.replay.round.number}, ${demoTime(time)}`}
+        onClick={(event) => {
+          if (!onPoint) return;
+          const matrix = event.currentTarget.getScreenCTM();
+          if (!matrix) return;
+          const p = new DOMPoint(
+            event.clientX,
+            event.clientY,
+          ).matrixTransform(matrix.inverse());
+          if (p.x >= 0 && p.y >= 0 && p.x <= width && p.y <= height)
+            onPoint({ x: p.x / width, y: p.y / height, level });
+        }}
+      >
+        <RadarBackground map={map} level={level} />
+        {radarMarks(false)}
       </svg>
     )
+  );
+  // In 3D the theater keeps the overview as a small radar under the controls.
+  radarAvailable.current = !!(theater && in3d && radarReady);
+  const radarLabel = `Radar ${map?.name}, Runde ${data.replay.round.number}, ${demoTime(time)}`;
+  const minimap = theater && in3d && radarReady && !largeRadar && (
+    <div className="demo-minimap" title="Strg drücken: Radar vergrößern">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${radarLabel}. Strg vergrößert das Radar.`}>
+        <RadarBackground map={map} level={level} />
+        {radarMarks(true)}
+      </svg>
+    </div>
+  );
+  const radarOverlay = theater && in3d && radarReady && largeRadar && (
+    <div className="demo-radar-overlay" title="Strg oder Esc: Radar verkleinern">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${radarLabel}. Strg oder Esc verkleinert das Radar.`}>
+        <RadarBackground map={map} level={level} />
+        {radarMarks(false)}
+      </svg>
+    </div>
   );
   const emptyMap = (
     <Empty>
@@ -1092,12 +1156,16 @@ export function DemoPlayer({
         ) : (
           <div className="demo-stage demo-stage-status">{emptyMap}</div>
         )}
+        {radarOverlay}
         {theaterTop(
           <>
             {clockChip}
             {killfeedList}
           </>,
-          theaterTools,
+          <>
+            {theaterTools}
+            {minimap}
+          </>,
         )}
         <div className="demo-theater-bottom">
           {(showTeams || in3d) && (

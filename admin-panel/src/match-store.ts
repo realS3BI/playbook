@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Db, Collection } from "mongodb";
 import { authorize, isPlatformAdmin, type Actor } from "../shared/authorization.js";
 import type { MatchEntry, Prematch } from "../shared/matches.js";
+import { parseMatchShareCode, shareCodeValid } from "../shared/matches.js";
+export { shareCodeValid } from "../shared/matches.js";
 import { problem, textField } from "./strats.js";
 import {
   SourceSecrets,
@@ -13,11 +15,6 @@ import type { WorkspaceStore } from "./workspace-store.js";
 
 const uuid = (value: unknown) =>
   typeof value === "string" && /^[\w-]{1,100}$/.test(value);
-export const shareCodeValid = (value: unknown) =>
-  typeof value === "string" &&
-  /^CSGO(?:-[ABCDEFGHJKLMNOPQRSTUVWXYZabcdefhijkmnopqrstuvwxyz23456789]{5}){5}$/.test(
-    value,
-  );
 export class MatchStore {
   readonly entries: Collection<any>;
   readonly connections: Collection<any>;
@@ -183,19 +180,20 @@ export class MatchStore {
         );
       playerId = player.player_id;
     } else {
+      const shareCode = parseMatchShareCode(input.shareCode);
       if (
-        !shareCodeValid(input.shareCode) ||
+        !shareCode ||
         typeof input.authenticationCode !== "string" ||
         !/^[A-Za-z0-9-]{10,100}$/.test(input.authenticationCode)
       )
         problem(
           400,
-          "Gib den Game Authentication Code und einen aktuellen Match-Sharecode ein.",
+          "Gib den Game Authentication Code und einen aktuellen Match-Sharecode oder Steam-Match-Link ein.",
         );
       if (!this.secrets)
         problem(503, "Der sichere Quellenzugang ist noch nicht eingerichtet.");
       historySecret = this.secrets.encrypt(input.authenticationCode);
-      cursor = input.shareCode;
+      cursor = shareCode;
     }
     if (
       (await this.connections.countDocuments({

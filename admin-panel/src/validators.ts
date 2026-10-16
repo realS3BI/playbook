@@ -177,6 +177,8 @@ export function sanitizeNades(entries) {
     const lineupPos = normalizeVector(entry.lineupPos, "Lineup position");
     const lineupAng = normalizeVector(entry.lineupAng, "Lineup angle");
     const landingPos = normalizeOptionalVector(entry.landingPos, "Landing position");
+    const releasePos = normalizeOptionalVector(entry.releasePos, "Release position");
+    const releaseAng = normalizeOptionalVector(entry.releaseAng, "Release angle");
     const throwFromTitle = String(entry.throwFromTitle ?? "").trim();
     const throwToTitle = String(entry.throwToTitle ?? "").trim();
     const radarFrom = sanitizeRadarPoint(entry.radarFrom, "Radar start");
@@ -223,6 +225,8 @@ export function sanitizeNades(entries) {
     if (throwTechnique) cleanEntry.throwTechnique = throwTechnique;
     if (throwTrace) cleanEntry.throwTrace = throwTrace;
     if (landingPos) cleanEntry.landingPos = landingPos;
+    // Where the grenade left after a run-up or jump; lineupPos stays the spot to aim from.
+    if (releasePos && releaseAng) Object.assign(cleanEntry, { releasePos, releaseAng });
     if (displayName) cleanEntry.displayName = displayName;
     if (entry.mustKnow !== undefined) cleanEntry.mustKnow = entry.mustKnow;
     if (entry.official !== undefined) cleanEntry.official = entry.official;

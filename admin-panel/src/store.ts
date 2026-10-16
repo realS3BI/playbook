@@ -1,6 +1,7 @@
 import { assignNadeIds } from "./nade-ids.js";
 import { Collection, Db, MongoClient } from "mongodb";
 import { sanitizeAdmins, sanitizeNades, sanitizeSettings } from "./validators.js";
+import { withRecordedThrowSetup } from "./measured-lineup.js";
 import { normalizeSettings, migrateAdmins } from "./policy.js";
 import { NadeEvents } from "./nade-events.js";
 import { accessOf, legacyAccess, legacyRole, cssFlags, type Access } from "../shared/authorization.js";
@@ -116,6 +117,26 @@ export class Store {
       }
     }
     await this.migrateNadeIds();
+    await this.migrateThrowSetup();
+  }
+
+  async migrateThrowSetup() {
+    for (;;) {
+      const document = await this.nades.findOne({ _id: "current" });
+      if (!document?.entries || document.throwSetupVersion >= 1) return;
+      const entries = withRecordedThrowSetup(document.entries);
+      const changed = entries.some((entry, index) => entry !== document.entries[index]);
+      if (changed) await this.nades.updateOne(
+        { _id: "before-throw-setup-v1" },
+        { $setOnInsert: { entries: document.entries, updatedAt: document.updatedAt, backedUpAt: new Date() } },
+        { upsert: true }
+      );
+      const result = await this.nades.updateOne(
+        { _id: "current", entries: document.entries },
+        { $set: { entries: changed ? sanitizeNades(entries) : document.entries, throwSetupVersion: 1, ...(changed && { updatedAt: new Date() }) } }
+      );
+      if (result.matchedCount) return;
+    }
   }
 
   async migrateNadeIds() {

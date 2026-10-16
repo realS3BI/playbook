@@ -28,7 +28,12 @@ public sealed class ThrowAttributesTests
         Assert.False(attributes.IsRunning);
         Assert.True(attributes.IsStepping);
         Assert.Equal("right", attributes.ClickType);
-        Assert.True(ThrowAttributes.Detect([samples[1] with { Buttons = "Duck, Attack", Velocity = "180 0 0" }]).IsRunning);
+        Assert.True(ThrowAttributes.Detect([samples[1] with { Buttons = "Attack", Velocity = "180 0 0" }]).IsRunning);
+        // Moving while crouched is slow like walking; the crouch itself stays its own attribute.
+        var crouched = ThrowAttributes.Detect([samples[1] with { Buttons = "Duck, Attack", Velocity = "180 0 0" }]);
+        Assert.True(crouched.IsWalking && crouched.IsCrouch);
+        // CS2 reports Shift as Speed.
+        Assert.True(ThrowAttributes.Detect([samples[1] with { Buttons = "Speed, Attack", Velocity = "130 0 0" }]).IsWalking);
         Assert.True(ThrowAttributes.Detect([samples[1] with { Buttons = "Duck, Attack" }]).IsCrouch);
         Assert.False(ThrowAttributes.Detect([samples[1] with { Buttons = "Walk, Attack", Velocity = "0 0 0" }]).IsWalking);
     }

@@ -555,3 +555,21 @@ test("review media survive game rewrites and only current platform admins approv
   assert.equal(store.entries[0].official, true);
   assert.deepEqual(store.entries[0].reviewMedia, reviewMediaFixture);
 });
+
+test("recorded run-ups reach the panel as lineup, movement and release steps", async t => {
+  const owner = "76561198000000001";
+  const fixture = JSON.parse(await readFile("../server-plugin/Playbook.Tests/Fixtures/throw-motion.json", "utf8"));
+  const run = fixture.find(item => item.name.startsWith("dust2 window"));
+  const capture = sampleCapture({ owner, newLineup: true, lineupPos: "-1049.476 -961.8234 167.9531", lineupAng: "-18.45 93.16 0",
+    throwTrace: JSON.stringify(run.trace), ...run.expected.attributes });
+  const { service, store } = await createHarness(t);
+  await service.writeFromMongo([]);
+  await writeJson(join(dirname(service.liveFile), "savednades.captures.json"), [capture]);
+  await service.poll();
+  assert.equal(store.entries[0].lineupPos, "-1044.044 -1059.969 132.4067");
+  assert.equal(store.entries[0].releasePos, capture.lineupPos);
+  const metadata = JSON.parse(await readFile(join(dirname(service.liveFile), "savednades.metadata.json"), "utf8"));
+  assert.deepEqual(metadata[0].throwSteps, run.expected.steps);
+  const live = JSON.parse(await readFile(service.liveFile, "utf8"));
+  assert.equal(live[owner][capture.name].LineupPos, "-1044.044 -1059.969 132.4067", "MatchZy loads the lineup spot as well");
+});

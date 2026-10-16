@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Crosshair, RefreshCw } from "lucide-react";
 import { lineupCamera, VERTICAL_FOV_DEGREES } from "../../../shared/map-scene";
+import { analyzeThrowMotion } from "../../../shared/throw-motion";
 import { acquireMapScene, floorBelow, mountMapScene, viewExposure, type MapSceneInfo } from "../lib/map-scene";
 import { api } from "../lib/api";
 import { Button } from "./ui/button";
@@ -21,7 +22,10 @@ type Phase =
 
 const megabytes = (bytes: number) => (bytes / 1048576).toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-export default function LineupPov({ nade, mapName, mapLabel }: { nade: any; mapName: string; mapLabel: string }) {
+export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: any; mapName: string; mapLabel: string }) {
+  // Eye height follows the stance while aiming, which can differ from the stance when letting go.
+  const setupCrouch = useMemo(() => entry.throwTrace ? analyzeThrowMotion(entry.throwTrace)?.setup.crouch : undefined, [entry.throwTrace]);
+  const nade = useMemo(() => setupCrouch === undefined ? entry : { ...entry, is_crouch: setupCrouch }, [entry, setupCrouch]);
   const camera = lineupCamera(nade);
   const cameraKey = camera ? `${camera.eye.join()} ${camera.forward.join()}` : "";
   const stageRef = useRef<HTMLDivElement>(null);

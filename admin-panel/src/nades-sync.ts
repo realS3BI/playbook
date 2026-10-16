@@ -5,6 +5,7 @@ import { setTimeout as wait } from "node:timers/promises";
 import { applyPlayerNadeRequest, applyGameReviewDecision } from "./nade-review.js";
 import { replaceMeasuredLineup } from "./measured-lineup.js";
 import { THROW_ATTRIBUTE_FIELDS } from "../shared/throw-attributes.js";
+import { describeLineupThrow, withThrowSetup } from "../shared/throw-motion.js";
 import {
   matchZySavedNadesConfigToNades,
   nadesToMatchZySavedNadesConfig,
@@ -25,6 +26,8 @@ function stableNades(entries) {
     reviewStatus: entry.reviewStatus || "",
     reviewMedia: entry.reviewMedia,
     landingPos: entry.landingPos,
+    releasePos: entry.releasePos,
+    releaseAng: entry.releaseAng,
     captureId: entry.captureId,
     throwTechnique: entry.throwTechnique,
     throwTrace: entry.throwTrace,
@@ -77,7 +80,7 @@ export function mergeNadeCaptures(entries, captures) {
         THROW_ATTRIBUTE_FIELDS.some(key => capture[key] === undefined || capture[key] === null) ||
         typeof capture.flightDuration !== "number" || !Number.isFinite(capture.flightDuration) || capture.flightDuration < 0 || mergedEntries.some(entry => nadeKey(entry) === nadeKey(capture))) continue;
     try {
-      const [entry] = sanitizeNades([{
+      const [entry] = sanitizeNades([withThrowSetup({
         name: capture.name, displayName: capture.displayName, map: capture.map, type: capture.type,
         desc: capture.description || capture.throwTechnique || "Im Spiel aufgenommen",
         lineupPos: capture.lineupPos, lineupAng: capture.lineupAng, landingPos: capture.landingPos,
@@ -87,7 +90,7 @@ export function mergeNadeCaptures(entries, captures) {
         ...Object.fromEntries(THROW_ATTRIBUTE_FIELDS.filter(key => capture[key] !== null).map(key => [key, capture[key]])),
         ...(capture.flightDuration !== undefined && capture.flightDuration !== null ? { flightDuration: capture.flightDuration } : {}),
         updatedAt: capture.capturedAt
-      }]);
+      })]);
       mergedEntries.push(entry);
     } catch { /* Ignore malformed capture entries; regular MatchZy sync remains available. */ }
   }
@@ -383,6 +386,19 @@ export class NadesSyncService {
     this.lastError = "";
   }
 
+  // Traces rarely change, while the metadata is rewritten on every capture poll.
+  private steps = new Map<string, string[] | null>();
+  private throwSteps(entry) {
+    if (!entry.throwTrace) return null;
+    const key = `${entry.throwTrace}\0${THROW_ATTRIBUTE_FIELDS.map(field => entry[field]).join("\0")}`;
+    if (!this.steps.has(key)) {
+      if (this.steps.size > 2000) this.steps.clear();
+      const description = describeLineupThrow(entry);
+      this.steps.set(key, description ? [description.lineup, description.movement, description.release] : null);
+    }
+    return this.steps.get(key);
+  }
+
   async writeMetadata(entries) {
     await writeJsonFileAtomic(`${dirname(this.liveFile)}/savednades.metadata.json`, entries.map(entry => ({
       owner: entry.owner, map: entry.map, name: entry.name, team: entry.team, displayName: entry.displayName || "",
@@ -390,6 +406,7 @@ export class NadesSyncService {
       reviewMediaSlots: Object.keys(entry.reviewMedia || {}),
       landingPos: entry.landingPos || null,
       ...Object.fromEntries([...THROW_ATTRIBUTE_FIELDS, "flightDuration", "throwFromTitle", "throwToTitle", "throwTechnique"].map(key => [key, entry[key]])),
+      throwSteps: this.throwSteps(entry),
     })));
   }
 

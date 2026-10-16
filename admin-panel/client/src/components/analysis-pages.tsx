@@ -771,11 +771,18 @@ export function DemoPage({ maps }: Props) {
   const [busy, setBusy] = useState(false);
   const [buyFilter, setBuyFilter] = useState({ t: "", ct: "" });
   const selectedFocus = useRef("");
+  const ribbon = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const demo = resource.data?.demo;
   const round =
     demo?.summary?.rounds.find((round) => round.id === params.get("round")) ||
     demo?.summary?.rounds[0];
+  // A full match does not fit the strip; the chosen round stays in view.
+  useEffect(() => {
+    ribbon.current
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [round?.id, !!demo]);
   if (!demo)
     return (
       <>
@@ -1048,7 +1055,12 @@ export function DemoPage({ maps }: Props) {
   const filtered = !!(buyFilter.t || buyFilter.ct);
   const rounds = (
     <div className="demo-theater-rounds">
-      <div className="demo-ribbon" role="group" aria-label="Runden auswählen">
+      <div
+        ref={ribbon}
+        className="demo-ribbon"
+        role="group"
+        aria-label="Runden auswählen"
+      >
         {demo.summary.rounds.map((entry, at) => {
           const scored = demo.summary.rounds.some((r) => r.winner);
           const until = demo.summary.rounds.slice(0, at + 1);

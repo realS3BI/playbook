@@ -1,3 +1,21 @@
+export const shareCodeValid = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^CSGO(?:-[ABCDEFGHJKLMNOPQRSTUVWXYZabcdefhijkmnopqrstuvwxyz23456789]{5}){5}$/.test(value);
+
+export function parseMatchShareCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const input = value.trim();
+  if (shareCodeValid(input)) return input;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(input);
+  } catch {
+    return null;
+  }
+  const match = /^steam:\/\/rungame\/730\/\d{17}\/\+csgo_download_match (CSGO-[A-Za-z0-9-]+)$/.exec(decoded);
+  return match && shareCodeValid(match[1]) ? match[1] : null;
+}
+
 export type MatchPlayer = { id: string; steamId?: string; name: string };
 export type MatchEntry = {
   id: string;
