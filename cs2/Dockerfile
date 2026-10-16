@@ -10,6 +10,7 @@ WORKDIR /src/Playbook.Tests
 COPY server-plugin/Playbook.Tests/Playbook.Tests.csproj ./
 RUN dotnet restore Playbook.Tests.csproj
 COPY server-plugin/Playbook.Tests/*.cs ./
+COPY server-plugin/Playbook.Tests/Fixtures/ ./Fixtures/
 RUN dotnet test Playbook.Tests.csproj --no-restore --configuration Release
 
 FROM cm2network/cs2:latest
