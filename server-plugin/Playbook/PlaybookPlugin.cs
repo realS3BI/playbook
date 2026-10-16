@@ -426,6 +426,7 @@ public sealed partial class PlaybookPlugin : BasePlugin
     {
         if (!TrainingEnabled) { ResetCapture(); CloseAll(); _edits.Clear(); CancelMapVote(); return; }
         RecordSaveInputs();
+        RecordFlightPaths();
         foreach (var (actor, photo) in _reviewPhotos.ToArray()) {
             if (photo.Presentation.Maintain()) continue;
             WriteReviewFailure(actor, photo.Command, "Die Fotokamera oder das Charaktermodell ist nicht mehr verfügbar. Bitte erneut aufnehmen.");

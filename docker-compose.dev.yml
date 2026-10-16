@@ -35,7 +35,8 @@ services:
       FACEIT_API_KEY: ${FACEIT_API_KEY:-}
       FACEIT_DOWNLOADS_TOKEN: ${FACEIT_DOWNLOADS_TOKEN:-}
       STEAM_WEB_API_KEY: ${STEAM_WEB_API_KEY:-}
-      STEAM_GC_REFRESH_TOKEN: ${STEAM_GC_REFRESH_TOKEN:-}
+      # Use a separate Steam account locally, so development cannot replace the production session.
+      STEAM_GC_REFRESH_TOKEN: ${DEV_STEAM_GC_REFRESH_TOKEN:-}
     volumes:
       - ./admin-panel/src:/app/src:ro
       - ./admin-panel/shared:/app/shared:ro

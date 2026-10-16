@@ -34,9 +34,10 @@ import {
   type Playback,
   type RoundReplay,
   type SceneReference,
+  itemLabel,
   weaponLabel,
 } from "../../../shared/demos";
-import { areaEffects, bombAt, frameAt, loadoutAt, loadoutsById } from "../../../shared/demo-replay";
+import { areaEffects, blindnessAt, bombAt, frameAt, loadoutAt, loadoutsById } from "../../../shared/demo-replay";
 import { useStoredChoice } from "@/lib/stored-choice";
 import type { CameraMode } from "./demo-stage-3d";
 import { Button } from "./ui/button";
@@ -49,6 +50,7 @@ import { RadarBackground } from "./radar-background";
 import { RadarLevelSwitch } from "./radar-level-switch";
 import { Choice, Feedback } from "./workspace-ui";
 import { GrenadeIcon } from "./nade-icons";
+import { DemoWeapons } from "./demo-weapons";
 import { economyOptions } from "../../../shared/strats";
 
 // Three.js and the map scene load only when someone opens the 3D view.
@@ -450,6 +452,10 @@ export function DemoPlayer({
   const withPitch = !!data.replay.frames
     .find((frame) => frame.players.length)
     ?.players.some((player) => player.pitch !== undefined);
+  const withShots = !!data.replay.shots;
+  const focusBlind = focused && blindnessAt(data.replay.blinds, time).get(focused.id);
+  const seconds = (value: number) =>
+    `${value.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
   togglePlayback.current = disabled
     ? null
     : () => {
@@ -600,8 +606,18 @@ export function DemoPlayer({
       {cameraTools && <div className="demo-theater-tools">{cameraTools}</div>}
     </>
   );
+  const weapons = focused && focused.health > 0 && (
+    <DemoWeapons
+      name={byId(focused.id)}
+      side={focused.side === 2 ? "t" : "ct"}
+      active={focused.weapon}
+      items={focusGear?.items}
+    />
+  );
   const stageInfo = in3d ? (
     camera === "free" ? (
+      <div className="demo-ego-stack">
+      {weapons}
       <p className="demo-chip demo-3d-help">
         {flying ? <span>Maus zum Umsehen</span> : <span>In die Ansicht klicken zum Steuern</span>}
         <span><Kbd>W</Kbd><Kbd>A</Kbd><Kbd>S</Kbd><Kbd>D</Kbd> fliegen</span>
@@ -610,7 +626,10 @@ export function DemoPlayer({
         {flying && <span>Mausrad Tempo</span>}
         {flying && <span><Kbd>Esc</Kbd> Maus freigeben</span>}
       </p>
+      </div>
     ) : focused && focused.health > 0 ? (
+      <div className="demo-ego-stack">
+      {weapons}
       <p
         className="demo-chip demo-ego"
         data-side={focused.side === 2 ? "t" : "ct"}
@@ -625,14 +644,32 @@ export function DemoPlayer({
             {focusGear.armor}
           </span>
         )}
-        {focused.weapon && <span>{focused.weapon}</span>}
+        {focused.weapon && <span>{itemLabel(focused.weapon)}</span>}
+        {focusBlind && (
+          <span
+            className="demo-ego-blind"
+            title={
+              focusBlind.attackerId === focused.id
+                ? "Vom eigenen Flash geblendet"
+                : `Geblendet von ${byId(focusBlind.attackerId)}${sideOf(focusBlind.attackerId) === focused.side ? " (Teamflash)" : ""}`
+            }
+          >
+            Geblendet {seconds(focusBlind.remaining)}
+          </span>
+        )}
         {focusGear && <span>{money(focusGear.money)}</span>}
         {!withPitch && (
           <small title="Diese Analyse enthält nur die horizontale Blickrichtung. Neu hochgeladene Demos enthalten auch den Blick nach oben und unten.">
             Blick waagrecht
           </small>
         )}
+        {!withShots && (
+          <small title="Diese Analyse enthält noch keine Schüsse. Neu hochgeladene Demos zeigen Schüsse und Treffer in der 3D-Ansicht.">
+            Ohne Schüsse
+          </small>
+        )}
       </p>
+      </div>
     ) : (
       <p className="demo-chip demo-3d-help">
         {focused

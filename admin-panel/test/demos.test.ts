@@ -7,16 +7,18 @@ import { mkdir, readFile, writeFile, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { WebSocket } from "ws";
 import { workspaceFixture, ids } from "./workspace-fixture.js";
-import { demoRounds, roundEconomy, roundLoadouts } from "../src/demo-parser.js";
+import { demoRounds, roundBlinds, roundEconomy, roundLoadouts, roundShots } from "../src/demo-parser.js";
 import { processDemoJob, removeAnalyzedOriginals } from "../src/demo-worker.js";
 import {
   classifyBuy,
   loadoutSummary,
   playbackTime,
   roundClock,
+  itemLabel,
+  weaponClass,
   type SceneReference,
 } from "../shared/demos.js";
-import { areaEffects, frameAt, grenadeAt, lerpAngle } from "../shared/demo-replay.js";
+import { areaEffects, blindnessAt, frameAt, grenadeAt, lerpAngle } from "../shared/demo-replay.js";
 import { newStratContent } from "../shared/strats.js";
 
 const mongo = { skip: !process.env.TEST_MONGODB_URI };
@@ -713,4 +715,72 @@ test("3D replay knows how long smokes and fires last and where grenades fly", ()
   const path = { id: "g", kind: "CSmokeGrenadeProjectile", playerId: "a", points: [{ time: 1, x: 0, y: 0, z: 0 }, { time: 2, x: 10, y: 20, z: 30 }] };
   assert.deepEqual(grenadeAt(path, 1.5), { x: 5, y: 10, z: 15, index: 0 });
   assert.equal(grenadeAt(path, 2.5), null);
+});
+
+test("shots keep the eye angles of their tick and collect the damage they did", () => {
+  const shooter = { user_steamid: "76561190000000001", user_X: 100.04, user_Y: -50.06, user_Z: 12, user_pitch: 3.456, user_yaw: 179.994 };
+  const events = [
+    { event_name: "weapon_fire", tick: 999, weapon: "weapon_ak47", ...shooter },
+    { event_name: "weapon_fire", tick: 1064, weapon: "weapon_ak47", ...shooter },
+    { event_name: "player_hurt", tick: 1065, attacker_steamid: shooter.user_steamid, user_steamid: "76561190000000002", dmg_health: 27, hitgroup: "chest" },
+    { event_name: "weapon_fire", tick: 1072, weapon: "weapon_nova", ...shooter },
+    { event_name: "player_hurt", tick: 1072, attacker_steamid: shooter.user_steamid, user_steamid: "76561190000000002", dmg_health: 20, hitgroup: "head" },
+    { event_name: "player_hurt", tick: 1072, attacker_steamid: shooter.user_steamid, user_steamid: "76561190000000002", dmg_health: 15, hitgroup: "chest" },
+    // A knife swing and a grenade are no shots; damage long after a shot belongs to none.
+    { event_name: "weapon_fire", tick: 1080, weapon: "weapon_knife_t", ...shooter },
+    { event_name: "weapon_fire", tick: 1081, weapon: "weapon_hegrenade", ...shooter },
+    { event_name: "player_hurt", tick: 1090, attacker_steamid: shooter.user_steamid, user_steamid: "76561190000000003", dmg_health: 40, hitgroup: "generic" },
+    { event_name: "weapon_fire", tick: 1100, weapon: "weapon_deagle", ...shooter, user_pitch: undefined },
+  ];
+  const shots = roundShots(events, 1000, 2000, 1000);
+  assert.deepEqual(shots, [
+    { time: 1, playerId: shooter.user_steamid, weapon: "ak47", x: 100, y: -50.1, z: 12, yaw: 179.99, pitch: 3.46,
+      hits: [{ id: "76561190000000002", damage: 27 }] },
+    { time: 1.125, playerId: shooter.user_steamid, weapon: "nova", x: 100, y: -50.1, z: 12, yaw: 179.99, pitch: 3.46,
+      hits: [{ id: "76561190000000002", damage: 35, head: true }] },
+  ]);
+});
+
+test("weapon classes cover display and internal names", () => {
+  assert.equal(weaponClass("AK-47"), "rifle");
+  assert.equal(weaponClass("weapon_m4a1_silencer"), "rifle");
+  assert.equal(weaponClass("SSG 08"), "sniper");
+  assert.equal(weaponClass("MAC-10"), "smg");
+  assert.equal(weaponClass("Desert Eagle"), "pistol");
+  assert.equal(weaponClass("hkp2000"), "pistol");
+  assert.equal(weaponClass("knife_t"), "knife");
+  assert.equal(weaponClass("M9 Bayonet"), "knife");
+  assert.equal(weaponClass("High Explosive Grenade"), "grenade");
+  assert.equal(weaponClass("Flashbang"), "grenade");
+  assert.equal(weaponClass("Molotov"), "grenade");
+  assert.equal(weaponClass("C4 Explosive"), "c4");
+  assert.equal(weaponClass("Zeus x27"), "zeus");
+  assert.equal(weaponClass(""), "other");
+});
+
+test("item labels shorten inventory names for the HUD", () => {
+  assert.equal(itemLabel("knife_t"), "Messer");
+  assert.equal(itemLabel("Huntsman Knife"), "Messer");
+  assert.equal(itemLabel("C4 Explosive"), "C4");
+  assert.equal(itemLabel("High Explosive Grenade"), "HE");
+  assert.equal(itemLabel("Incendiary Grenade"), "Brandgranate");
+  assert.equal(itemLabel("AK-47"), "AK-47");
+});
+
+test("blindness keeps the strongest flash and fades over the last seconds", () => {
+  const events = [
+    { event_name: "player_blind", tick: 1064, user_steamid: "76561190000000002", attacker_steamid: "76561190000000001", blind_duration: 4.5123 },
+    { event_name: "player_blind", tick: 1064, user_steamid: "76561190000000003", attacker_steamid: "76561190000000001", blind_duration: 0.9 },
+    { event_name: "player_blind", tick: 1128, user_steamid: "76561190000000002", attacker_steamid: "76561190000000004", blind_duration: 1 },
+    { event_name: "player_blind", tick: 900, user_steamid: "76561190000000002", attacker_steamid: "", blind_duration: 3 },
+  ];
+  const blinds = roundBlinds(events, 1000, 2000, 1000);
+  assert.deepEqual(blinds.map((blind) => [blind.time, blind.duration]), [[1, 4.51], [1, 0.9], [2, 1]]);
+  const early = blindnessAt(blinds, 1.5);
+  assert.equal(early.get("76561190000000002")!.intensity, 1);
+  assert.ok(Math.abs(early.get("76561190000000003")!.intensity - 0.16) < 1e-9);
+  const late = blindnessAt(blinds, 4.51);
+  assert.ok(Math.abs(late.get("76561190000000002")!.remaining - 1) < 1e-9);
+  assert.equal(late.get("76561190000000002")!.attackerId, "76561190000000001");
+  assert.equal(blindnessAt(blinds, 5.6).size, 0);
 });

@@ -8,9 +8,10 @@ public sealed partial class PlaybookPlugin
 {
     private readonly NadeCaptureTracker _capture = new();
     private readonly GrenadeFlightTracker _flightTimes = new();
+    private readonly FlightPathRecorder _flightPaths = new();
     private sealed record DraftNameRequest(string Owner, NadeKind Kind, string Map,
         Coordinates Start, Coordinates Angles, Coordinates Target, string Technique, string Trace,
-        ThrowAttributes Attributes, string Team, float FlightDuration, NadeLineup? Original = null);
+        ThrowAttributes Attributes, string Team, float FlightDuration, NadeLineup? Original = null, string FlightPath = "");
     private readonly Dictionary<int, float> _saveRequests = [];
     private readonly Dictionary<int, List<ThrowSample>> _saveSamples = [];
     private readonly Dictionary<int, DraftNameRequest> _draftNameRequests = [];
@@ -151,6 +152,18 @@ public sealed partial class PlaybookPlugin
         }
     }
 
+    private void RecordFlightPaths()
+    {
+        _flightPaths.Prune(Server.CurrentTime);
+        foreach (var (id, handle) in _flightPaths.Flying)
+        {
+            var projectile = Utilities.GetEntityFromIndex<CBaseCSGrenadeProjectile>(id);
+            if (projectile is not { IsValid: true } || projectile.EntityHandle.Raw != handle || projectile.AbsOrigin is not { } origin)
+                _flightPaths.Lost(id);
+            else _flightPaths.Sample(id, Server.CurrentTime, new(origin.X, origin.Y, origin.Z));
+        }
+    }
+
     private bool TrySaveNameFromChat(CCSPlayerController? player, string rawText)
     {
         if (!CanWriteNades(player)) return false;
@@ -182,7 +195,8 @@ public sealed partial class PlaybookPlugin
         {
             NadeCaptureFile.Write(Path.Combine(Path.GetDirectoryName(_libraryPath)!, "savednades.captures.json"),
                 NadeCaptureFile.CreateNew(request.Owner, name, displayName, request.Map, request.Kind,
-                    request.Start, request.Angles, request.Target, request.Technique, request.Trace, request.Attributes, request.Team, request.FlightDuration));
+                    request.Start, request.Angles, request.Target, request.Technique, request.Trace, request.Attributes, request.Team, request.FlightDuration,
+                    request.FlightPath));
             _draftNameRequests.Remove(player.Slot);
             Tell(player, $"{MenuRenderer.Plain(displayName, 100)} gespeichert. Dashboard und Ingame-Bibliothek übernehmen das Lineup automatisch.");
         }
@@ -211,7 +225,7 @@ public sealed partial class PlaybookPlugin
             try
             {
                 var capture = NadeCaptureFile.CreateReplacement(original, request.Kind, request.Start, request.Angles, request.Target,
-                    request.Technique, request.Trace, request.Attributes, request.FlightDuration);
+                    request.Technique, request.Trace, request.Attributes, request.FlightDuration, request.FlightPath);
                 var value = System.Text.Json.JsonSerializer.SerializeToElement(capture,
                     new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase });
                 if (QueueLineupRequest(player, original, "replace", value)) _draftNameRequests.Remove(player.Slot);
@@ -268,6 +282,8 @@ public sealed partial class PlaybookPlugin
                 if (StandaloneTraining) RememberGrenade(player, projectile);
                 _capture.Projectile((int)entity.Index, player.Slot, player.SteamID, kind, Server.CurrentTime);
                 _flightTimes.Projectile((int)entity.Index, player.Slot, player.SteamID, kind, Server.CurrentTime);
+                if (projectile.AbsOrigin is { } origin)
+                    _flightPaths.Start((int)entity.Index, entity.EntityHandle.Raw, player.Slot, player.SteamID, kind, Server.CurrentTime, new(origin.X, origin.Y, origin.Z));
             }
             else if (StandaloneTraining)
                 Logger.LogWarning("[Rethrow] Wurf nicht gespeichert: Entity={Entity}, Typ={Type}, Grund=kein gültiger menschlicher Werfer im nächsten Frame, Thrower={Thrower}",
@@ -287,13 +303,14 @@ public sealed partial class PlaybookPlugin
         if (!TrainingEnabled || player is not { IsValid: true } ||
             !float.IsFinite(target.X) || !float.IsFinite(target.Y) || !float.IsFinite(target.Z)) return HookResult.Continue;
         CompleteFlightTime(entityId, player, kind);
+        var path = _flightPaths.Finish(entityId, player.Slot, player.SteamID, kind, Server.CurrentTime, target);
         var captured = _capture.CompleteMeasured(entityId, player.Slot, player.SteamID, kind, Server.MapName, Server.CurrentTime)
             ?? _capture.CompleteMeasuredByThrower(player.Slot, player.SteamID, kind, Server.MapName, Server.CurrentTime);
         if (captured == null) return HookResult.Continue;
-        return CompleteNamedCapture(player, captured.Value.Lineup, target, captured.Value.Seconds);
+        return CompleteNamedCapture(player, captured.Value.Lineup, target, captured.Value.Seconds, path);
     }
 
-    private HookResult CompleteNamedCapture(CCSPlayerController player, NadeLineup lineup, Coordinates target, float? flightDuration)
+    private HookResult CompleteNamedCapture(CCSPlayerController player, NadeLineup lineup, Coordinates target, float? flightDuration, string? flightPath)
     {
         if (!CanWriteNades(player)) return HookResult.Continue;
         if (!float.IsFinite(target.X) || !float.IsFinite(target.Y) || !float.IsFinite(target.Z)) return HookResult.Continue;
@@ -307,7 +324,7 @@ public sealed partial class PlaybookPlugin
             _draftNameRequests[player.Slot] = new(lineup.Owner, lineup.Kind, lineup.Map,
                 lineup.Position, lineup.Angles, target, technique, lineup.ThrowTrace,
                 lineup.Attributes ?? ThrowAttributes.Detect(samples), lineup.Team, measured,
-                _captureEdits.Remove(player.Slot, out var original) ? original : null);
+                _captureEdits.Remove(player.Slot, out var original) ? original : null, flightPath ?? "");
             var duration = FormattableString.Invariant($" Flugzeit: {measured:0.00} s.");
             Tell(player, $"Ziel erfasst: {steps?.Summary ?? technique}.{duration} Panelbedienung aktivieren und unter " +
                 (original != null ? "Lineup bearbeiten die Neuaufnahme speichern oder verwerfen." : "Neue Nade aufnehmen die Aufnahme speichern oder verwerfen. Optional einen eigenen Namen im Chat eingeben."));
@@ -341,8 +358,9 @@ public sealed partial class PlaybookPlugin
         }
         CompleteFlightTime(null, player, NadeKind.Fire);
         // Molotov detonation does not expose a projectile entity id in the CS# event.
+        var path = _flightPaths.Finish(null, player.Slot, player.SteamID, NadeKind.Fire, Server.CurrentTime, target);
         var captured = _capture.CompleteMeasuredByThrower(player.Slot, player.SteamID, NadeKind.Fire, Server.MapName, Server.CurrentTime);
-        return captured == null ? HookResult.Continue : CompleteNamedCapture(player, captured.Value.Lineup, target, captured.Value.Seconds);
+        return captured == null ? HookResult.Continue : CompleteNamedCapture(player, captured.Value.Lineup, target, captured.Value.Seconds, path);
     }
 
     private void ClearCapture(int slot)
@@ -357,6 +375,7 @@ public sealed partial class PlaybookPlugin
     {
         _capture.Clear();
         _flightTimes.Clear();
+        _flightPaths.Clear();
         _fireEffectOrigins.Clear();
         _syntheticProjectiles.Clear();
         _saveRequests.Clear();

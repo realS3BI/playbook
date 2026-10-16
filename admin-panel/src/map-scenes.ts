@@ -8,7 +8,7 @@ import { createGunzip, gzip } from "node:zlib";
 import { MAP_SCENE_NAME } from "../shared/map-scene.js";
 
 // Bump to re-export every map after changing the export or optimisation settings.
-export const MAP_SCENE_PIPELINE = 3;
+export const MAP_SCENE_PIPELINE = 4;
 const MANIFEST = "manifest.json";
 const STATUS = "status.json";
 const LOG_LINES = 300;

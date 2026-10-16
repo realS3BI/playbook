@@ -15,7 +15,7 @@ export function replaceMeasuredLineup(entry, capture) {
     type: capture.type, lineupPos: capture.lineupPos, lineupAng: capture.lineupAng, landingPos: capture.landingPos,
     desc: capture.description || capture.throwTechnique || "Im Spiel aufgenommen",
     radarFrom: null, radarTo: null, flightDuration: capture.flightDuration,
-    throwTechnique: capture.throwTechnique, throwTrace: capture.throwTrace,
+    throwTechnique: capture.throwTechnique, throwTrace: capture.throwTrace, flightPath: capture.flightPath,
     ...Object.fromEntries(THROW_ATTRIBUTE_FIELDS.map(key => [key, capture[key]])),
     captureId: capture.captureId, reviewStatus: "", reviewMedia: undefined, lineupImages: [],
     updatedAt: new Date(Math.max(Date.now(), Date.parse(entry.updatedAt) + 1 || 0)).toISOString(),

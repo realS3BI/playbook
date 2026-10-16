@@ -1239,6 +1239,30 @@ button:not(:disabled),
 .official-media-stage .lineup-pov, .official-media-stage .lineup-pov-stage { height: 100%; }
 .official-media-stage .lineup-pov-stage { border: 0; border-radius: 0; }
 .official-media-stage .lineup-pov-caption { position: absolute; right: 0.75rem; bottom: 0.75rem; left: 0.75rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); padding: 0.4rem 0.4rem 0.4rem 0.75rem; background: rgb(7 12 16 / 78%); backdrop-filter: blur(6px); }
+.lineup-pov-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+/* Throw replay: phase top left, held keys bottom left, playback controls in the caption bar. */
+.throw-replay-status { position: absolute; top: 0.75rem; left: 0.75rem; max-width: min(28rem, calc(100% - 1.5rem)); display: grid; gap: 0.15rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); padding: 0.45rem 0.7rem; background: rgb(7 12 16 / 78%); backdrop-filter: blur(6px); pointer-events: none; }
+.throw-replay-status p:first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; color: var(--text-strong); font-size: var(--type-sm); }
+.throw-replay-status p:first-child span { color: var(--text-secondary); font-size: var(--type-xs); }
+.throw-replay-source { color: var(--text-muted); font-size: var(--type-2xs); }
+.throw-replay-keys { position: absolute; left: 0.75rem; bottom: 4.25rem; display: grid; justify-items: start; gap: 0.25rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); padding: 0.5rem; background: rgb(7 12 16 / 72%); backdrop-filter: blur(6px); pointer-events: none; }
+.throw-replay-keys > div { display: flex; gap: 0.25rem; }
+.throw-replay-keys > div:first-child { padding-left: 2.15rem; }
+.throw-replay-keys kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 1.9rem; height: 1.9rem; padding-inline: 0.4rem; border: 1px solid rgb(255 255 255 / 16%); border-radius: var(--radius-sm); background: rgb(255 255 255 / 6%); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-2xs); font-weight: 600; }
+.throw-replay-keys kbd[data-key="Space"] { min-width: 5rem; }
+.throw-replay-keys kbd[data-held] { border-color: var(--brand); background: var(--brand); color: var(--brand-ink); }
+.throw-replay-bar { display: flex; align-items: center; gap: 0.6rem; width: 100%; min-width: 0; }
+.throw-replay-seek { flex: 1; min-width: 4rem; accent-color: var(--brand); cursor: pointer; }
+.throw-replay-seek:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.throw-replay-clock { color: var(--text-secondary); font-size: var(--type-xs); white-space: nowrap; }
+.throw-replay-speed { display: flex; overflow: hidden; border: 1px solid rgb(255 255 255 / 13%); border-radius: var(--radius-md); }
+.throw-replay-speed button { min-width: 2.5rem; height: 2.25rem; color: var(--text-secondary); font-size: var(--type-xs); font-weight: 600; cursor: pointer; transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
+.throw-replay-speed button + button { border-left: 1px solid rgb(255 255 255 / 10%); }
+.throw-replay-speed button:hover { background: rgb(255 255 255 / 8%); color: var(--text-strong); }
+.throw-replay-speed button[aria-pressed="true"] { background: var(--muted-foreground); color: var(--background); }
+.throw-replay-speed button:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; }
+@container media-stage (max-width: 40rem) { .throw-replay-clock, .throw-replay-keys, .throw-replay-source { display: none; } }
+@media (prefers-reduced-motion: reduce) { .throw-replay-speed button { transition: none; } }
 .lineup-coordinates { font-size: var(--type-sm); color: var(--muted-foreground); }
 .lineup-coordinates summary { cursor: pointer; }
 .lineup-review { display: grid; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1rem; }
@@ -1574,8 +1598,13 @@ button:not(:disabled),
 .demo-3d-label span { display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 0.25rem; padding: 0.05rem 0.35rem; background: rgb(8 14 21 / 72%); color: var(--text-default); font-size: var(--type-2xs); font-weight: 500; }
 .demo-3d-label b { color: var(--label-side); font-family: var(--font-mono); font-weight: 600; }
 .demo-3d-label[data-focus="true"] span { outline: 1px solid var(--brand); color: var(--text-strong); }
+.demo-3d-label mark { border-radius: 0.2rem; padding: 0 0.3rem; background: #fff; color: #0b1118; font-family: var(--font-mono); font-size: 0.625rem; font-weight: 600; line-height: 1.4; box-shadow: 0 0 10px 2px rgb(255 255 255 / 55%); }
+.demo-3d-label em { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.625rem; font-style: normal; line-height: 1; text-shadow: 0 1px 2px rgb(0 0 0 / 80%); }
 .demo-3d-label i { display: block; width: 2.4rem; height: 3px; overflow: hidden; border-radius: 2px; background: rgb(8 14 21 / 72%); }
 .demo-3d-label s { display: block; height: 100%; background: var(--label-side); text-decoration: none; }
+/* Flashbang blindness in the ego view, faded by the stage on every frame. */
+.demo-3d-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.demo-ego-blind { border-radius: 0.2rem; padding: 0 0.35rem; background: #fff; color: #0b1118; font-weight: 600; }
 .demo-3d-crosshair { position: absolute; top: 50%; left: 50%; width: 0; height: 0; pointer-events: none; }
 .demo-3d-crosshair svg { position: absolute; top: 0; left: 0; overflow: visible; }
 /* Sniper scopes black out everything outside the lens, with thin lines through the centre. */
@@ -1587,6 +1616,20 @@ button:not(:disabled),
 .demo-ego span { display: inline-flex; align-items: center; gap: 0.25rem; }
 .demo-ego svg { width: 0.9rem; height: 0.9rem; }
 .demo-ego small { color: var(--status-warning); font-size: var(--type-2xs); cursor: help; }
+.demo-ego-stack { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; max-width: 100%; }
+.demo-hud-bottom-right .demo-ego-stack { align-items: flex-end; }
+/* The focused player's inventory like the weapon list in the CS2 HUD: the item in hand lights up in the team colour. */
+.demo-weapons { --weapons-side: var(--side-ct); display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; margin: 0; padding: 0; list-style: none; pointer-events: none; }
+.demo-weapons[data-side="t"] { --weapons-side: var(--side-t); }
+.demo-weapons li { display: inline-flex; align-items: center; gap: 0.4rem; height: 1.75rem; border: 1px solid rgb(255 255 255 / 8%); border-radius: 0.35rem; padding-inline: 0.5rem; background: rgb(8 14 21 / 72%); backdrop-filter: blur(6px); color: var(--text-secondary); font-family: var(--font-mono); font-size: var(--type-2xs); white-space: nowrap; }
+.demo-weapons li[data-active] { border-color: color-mix(in srgb, var(--weapons-side) 70%, transparent); background: color-mix(in srgb, var(--weapons-side) 18%, rgb(8 14 21 / 80%)); color: var(--text-strong); opacity: 1; }
+.demo-weapons svg { width: 2.6rem; height: 0.85rem; flex: none; fill: currentColor; }
+.demo-weapons li[data-active] svg { color: var(--weapons-side); }
+.demo-weapons li > svg.lucide { width: 0.95rem; height: 0.95rem; fill: none; }
+.demo-weapons-nades { gap: 0.15rem; }
+.demo-weapons-nades > span[data-active] { border-radius: 0.2rem; outline: 1px solid var(--weapons-side); }
+.demo-weapons-nades img { opacity: 0.8; }
+.demo-weapons-nades [data-active] img, .demo-weapons-nades[data-active] img { opacity: 1; }
 .demo-3d-help { flex-wrap: wrap; justify-content: flex-end; gap: 0.3rem 0.8rem; max-width: 34rem; color: var(--text-muted); font-family: var(--font-sans); font-size: var(--type-2xs); letter-spacing: 0; text-transform: none; }
 .demo-3d-help span { display: inline-flex; align-items: center; gap: 0.2rem; }
 /* Narrow stages: icon-only controls, and the player info moves above them. */

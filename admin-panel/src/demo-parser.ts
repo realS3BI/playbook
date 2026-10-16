@@ -18,6 +18,8 @@ import {
   type DemoSummary,
   type RoundReplay,
   type GrenadePath,
+  type Shot,
+  type Blind,
 } from "../shared/demos.js";
 import { INSIGHTS_VERSION, roundInsights, type DemoInsights } from "../shared/demo-insights.js";
 
@@ -39,7 +41,17 @@ const EVENT_NAMES = [
   "bomb_exploded",
   "bomb_dropped",
   "bomb_pickup",
+  "weapon_fire",
+  "player_hurt",
+  "player_blind",
 ];
+// Shots, damage and blindness get their own lists; the event list keeps what the timeline and killfeed show.
+const OWN_LISTS = new Set(["weapon_fire", "player_hurt", "player_blind"]);
+// Swinging a knife, throwing grenades or planting also fire `weapon_fire`.
+const NOT_A_SHOT = /knife|bayonet|grenade|flashbang|molotov|incgrenade|decoy|c4|healthshot/;
+// Damage within this many ticks after a shot belongs to it.
+const HIT_TICKS = 2;
+const SHOT_LIMIT = 6000;
 const finite = (value: any) =>
   typeof value === "number" && Number.isFinite(value);
 
@@ -137,7 +149,8 @@ export async function parseDemo(
   const events = parseEvents(
     path,
     EVENT_NAMES,
-    ["X", "Y", "Z"],
+    // Eye angles at the event tick place shots exactly; the 8-tick frames would blur a spray.
+    ["X", "Y", "Z", "pitch", "yaw"],
     ["is_warmup_period", "total_rounds_played"],
   ).sort((a, b) => a.tick - b.tick);
   if (!Array.isArray(events))
@@ -279,7 +292,8 @@ export async function parseDemo(
           (event) =>
             event.tick >= round.buyTick &&
             event.tick <= round.afterTick &&
-            !event.event_name.startsWith("round_"),
+            !event.event_name.startsWith("round_") &&
+            !OWN_LISTS.has(event.event_name),
         )
         .map((event) => ({
           time: (event.tick - round.startTick) / TICK_RATE,
@@ -316,6 +330,8 @@ export async function parseDemo(
           ...(finite(event.entityid) && { entityId: event.entityid }),
         })),
       grenades: grenadeByRound.get(round.id) || [],
+      shots: roundShots(events, round.buyTick, round.afterTick, round.startTick),
+      blinds: roundBlinds(events, round.buyTick, round.afterTick, round.startTick),
     };
     if (!replay.frames.length)
       throw new Error(`Spielerpositionen fehlen in Runde ${round.number}.`);
@@ -352,6 +368,74 @@ export async function parseDemo(
     version: INSIGHTS_VERSION, demoId: basename(output), map: summary.map, players: summary.players, rounds: insights,
   } satisfies DemoInsights));
   return summary;
+}
+
+const tenth = (value: number) => Math.round(value * 10) / 10;
+const hundredth = (value: number) => Math.round(value * 100) / 100;
+
+/** Shots of one round with the damage they did. Events must be sorted by tick. */
+export function roundShots(events: any[], fromTick: number, toTick: number, startTick: number): Shot[] {
+  const shots: (Shot & { tick: number })[] = [];
+  const byShooter = new Map<string, (Shot & { tick: number })[]>();
+  const steamId = (value: any) => (typeof value === "string" && /^[0-9]{1,20}$/.test(value) ? value : "");
+  for (const event of events) {
+    if (event.event_name !== "weapon_fire" || event.tick < fromTick || event.tick > toTick) continue;
+    const weapon = String(event.weapon || "").toLowerCase().replace(/^weapon_/, "").slice(0, 40);
+    const playerId = steamId(event.user_steamid);
+    if (!weapon || NOT_A_SHOT.test(weapon) || !playerId) continue;
+    if (![event.user_X, event.user_Y, event.user_Z, event.user_pitch, event.user_yaw].every(finite)) continue;
+    if (shots.length >= SHOT_LIMIT) break;
+    const shot = {
+      tick: event.tick,
+      time: (event.tick - startTick) / TICK_RATE,
+      playerId,
+      weapon,
+      x: tenth(event.user_X),
+      y: tenth(event.user_Y),
+      z: tenth(event.user_Z),
+      yaw: hundredth(event.user_yaw),
+      pitch: hundredth(event.user_pitch),
+    };
+    shots.push(shot);
+    const list = byShooter.get(playerId) || [];
+    list.push(shot);
+    byShooter.set(playerId, list);
+  }
+  for (const event of events) {
+    if (event.event_name !== "player_hurt" || event.tick < fromTick || event.tick > toTick) continue;
+    const target = steamId(event.user_steamid), damage = Number(event.dmg_health);
+    if (!target || !(damage > 0)) continue;
+    const fired = byShooter.get(steamId(event.attacker_steamid)) || [];
+    let shot: (typeof fired)[number] | undefined;
+    for (let index = fired.length - 1; index >= 0 && !shot; index--)
+      if (fired[index].tick <= event.tick) shot = fired[index];
+    if (!shot || event.tick - shot.tick > HIT_TICKS) continue;
+    const hits = (shot.hits ||= []);
+    const hit = hits.find((entry) => entry.id === target);
+    const head = event.hitgroup === 1 || /head/i.test(String(event.hitgroup ?? ""));
+    if (hit) {
+      hit.damage += damage;
+      if (head) hit.head = true;
+    } else hits.push({ id: target, damage, ...(head && { head: true as const }) });
+  }
+  return shots.map(({ tick: _tick, ...shot }) => shot);
+}
+
+/** Flashbang blindness per player; flashes that only graze someone are kept, the game shows them too. */
+export function roundBlinds(events: any[], fromTick: number, toTick: number, startTick: number): Blind[] {
+  const steamId = (value: any) => (typeof value === "string" && /^[0-9]{1,20}$/.test(value) ? value : "");
+  return events
+    .filter((event) => event.event_name === "player_blind" && event.tick >= fromTick && event.tick <= toTick)
+    .flatMap((event) => {
+      const playerId = steamId(event.user_steamid), duration = Number(event.blind_duration);
+      if (!playerId || !(duration > 0) || duration > 10) return [];
+      return [{
+        time: (event.tick - startTick) / TICK_RATE,
+        playerId,
+        attackerId: steamId(event.attacker_steamid),
+        duration: hundredth(duration),
+      }];
+    });
 }
 
 type PlayerState = {

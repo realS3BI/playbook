@@ -106,12 +106,32 @@ export type GrenadePath = {
   playerId: string;
   points: { time: number; x: number; y: number; z: number }[];
 };
+/** A player the shot damaged; shotgun pellets of one shot add up. */
+export type ShotHit = { id: string; damage: number; head?: true };
+/** One shot with where the shooter stood and aimed at that tick. `weapon` is the internal name without `weapon_`. */
+export type Shot = {
+  time: number;
+  playerId: string;
+  weapon: string;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+  hits?: ShotHit[];
+};
+/** A flashbang blinding a player; `duration` is how long the game keeps them blind, in seconds. */
+export type Blind = { time: number; playerId: string; attackerId: string; duration: number };
 export type RoundReplay = {
   round: DemoRound;
   frames: DemoFrame[];
   events: DemoEvent[];
   grenades: GrenadePath[];
   loadouts?: PlayerLoadout[];
+  /** Missing in analyses made before shots were recorded. */
+  shots?: Shot[];
+  /** Missing in analyses made before flashes were recorded. */
+  blinds?: Blind[];
 };
 export type SceneReference = {
   demoId: string;
@@ -274,6 +294,43 @@ const WEAPONS: Record<string, string> = {
   bizon: "PP-Bizon", nova: "Nova", xm1014: "XM1014", sawedoff: "Sawed-Off", mag7: "MAG-7", m249: "M249",
   negev: "Negev", hegrenade: "HE", inferno: "Molotov", taser: "Zeus x27", planted_c4: "Bombe", world: "Welt",
 };
+export type WeaponClass = "rifle" | "sniper" | "smg" | "shotgun" | "mg" | "pistol" | "knife" | "grenade" | "c4" | "zeus" | "other";
+// Inventories and frames use display names ("AK-47"), shots and kills internal names ("weapon_ak47").
+const WEAPON_CLASSES: [WeaponClass, RegExp][] = [
+  ["sniper", /^(awp|ssg08|scar20|g3sg1)$/],
+  ["rifle", /^(ak47|m4a4|m4a1s?|m4a1silencer(off)?|galilar|famas|aug|sg553|sg556)$/],
+  ["smg", /^(mac10|mp9|mp7|mp5sd|ump45|p90|ppbizon|bizon)$/],
+  ["shotgun", /^(nova|xm1014|sawedoff|mag7)$/],
+  ["mg", /^(m249|negev)$/],
+  ["pistol", /^(glock(18)?|usps|uspsilencer(off)?|p2000|hkp2000|p250|fiveseven|tec9|cz75(auto|a)?|deserteagle|deagle|dualberettas|elite|r8revolver|revolver)$/],
+  ["zeus", /^(zeusx27|taser)$/],
+  ["c4", /^(c4(explosive)?|plantedc4)$/],
+  ["grenade", /grenade|flashbang|molotov|incendiary|decoy/],
+  ["knife", /knife|bayonet|karambit|dagger/],
+];
+export function weaponClass(name: string): WeaponClass {
+  const id = key(name.replace(/^weapon_/i, ""));
+  return WEAPON_CLASSES.find(([, pattern]) => pattern.test(id))?.[0] || "other";
+}
+
+// Inventory names that read badly in the HUD; guns keep their display names.
+const ITEM_LABELS: [RegExp, string][] = [
+  [/knife|bayonet|karambit|dagger/, "Messer"],
+  [/^c4/, "C4"],
+  [/^(highexplosivegrenade|hegrenade)$/, "HE"],
+  [/^smoke/, "Smoke"],
+  [/^flash/, "Flash"],
+  [/^(incendiarygrenade|incgrenade)$/, "Brandgranate"],
+  [/^molotov/, "Molotov"],
+  [/^decoy/, "Decoy"],
+  [/^zeus|^taser/, "Zeus x27"],
+];
+/** Readable name of an inventory item or active weapon, as frames and loadouts store them. */
+export function itemLabel(name: string) {
+  const id = key(name.replace(/^weapon_/i, ""));
+  return ITEM_LABELS.find(([pattern]) => pattern.test(id))?.[1] || name;
+}
+
 export function weaponLabel(name: string) {
   const key = name.toLowerCase().replace(/^weapon_/, "");
   return WEAPONS[key] || (/knife|bayonet/.test(key) ? "Messer" : name);

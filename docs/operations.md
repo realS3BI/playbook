@@ -274,6 +274,8 @@ Der Dienst `map-scenes` erstellt die Szenen. Er liest die Map-Archive read-only 
 
 Der Dienst prüft alle zehn Minuten Größe und Änderungszeit der Archive. Nach einem CS2-Update exportiert er eine geänderte Map neu, sobald das Archiv fünf Minuten unverändert ist. Ein fehlgeschlagener Export wird nach einer Stunde oder bei einer neuen Map-Version wiederholt. Die vorherige Szene bleibt bis dahin erhalten. Die Dateien liegen in `admin_panel_uploads` unter `map-scenes/`. Ihre Namen enthalten den Inhalts-Hash, deshalb liefert die API sie mit einem Jahr Browser-Cache aus. `manifest.json` im selben Ordner nennt die aktuelle Datei, die Quelle und den letzten Fehler je Map. In `status.json` meldet der Dienst alle 30 Sekunden, welche Map er gerade exportiert, dazu seine letzten 300 Meldungen.
 
+Der Export liest zusätzlich die Entity-Daten der Map. Objekte mit `startdisabled = true` oder `enabled = false`, etwa Wingman-Absperrungen auf Nuke und Inferno, werden anhand von Modell und Position vor dem Zusammenführen der Geometrie entfernt. Andere Platzierungen desselben Modells bleiben erhalten. Der Filter berücksichtigt den Anfangszustand der Map; spätere Änderungen durch Map-Skripte werden nicht simuliert. Ab Pipeline-Version 4 werden bestehende Szenen dafür automatisch neu exportiert.
+
 Plattform-Admins sehen beides auf der Website unter **Verwaltung → Abwurfsichten**: je Map den Status (bereit, wird exportiert, fehlgeschlagen mit Zeitpunkt des nächsten Versuchs, wartet) und das Protokoll des Dienstes. Meldet sich der Dienst zwei Minuten lang nicht, zeigt die Seite das als Warnung an. Auf dem Server:
 
 ```sh

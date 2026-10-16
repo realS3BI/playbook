@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { acceleratedRaycast, MeshBVH } from "three-mesh-bvh";
 import { MAX_FLOOR_DROP, SOURCE_UNIT_METRES, type Vector3 } from "../../../shared/map-scene";
 
 export type MapSceneInfo = { map: string; scene: string; lightmap: string | null; bytes: number };
@@ -124,6 +125,41 @@ export function mountMapScene(canvas: HTMLCanvasElement, loaded: LoadedMapScene)
     scene,
     // The map itself stays cached for the next view.
     dispose() { scene.remove(loaded.root); sky.dispose(); renderer.dispose(); },
+  };
+}
+
+// A plain raycast tests every triangle of the large map meshes, about 50 ms on Mirage. Shots need
+// one per bullet, so each opaque mesh gets a bounds tree, built a few meshes per frame while the
+// view already runs. The trees stay with the cached map for the next view.
+const BVH_BUDGET_MS = 8;
+const solidMeshes = new WeakMap<THREE.Object3D, THREE.Mesh[]>();
+export function prepareRaycasts(root: THREE.Object3D) {
+  let cancelled = false, ready = solidMeshes.get(root) || null;
+  if (!ready) {
+    const pending: THREE.Mesh[] = [];
+    root.traverse(object => {
+      const mesh = object as THREE.Mesh, material = mesh.material as THREE.Material;
+      if (mesh.isMesh && !material.transparent && !material.alphaTest) pending.push(mesh);
+    });
+    const built: THREE.Mesh[] = [];
+    const step = () => {
+      if (cancelled) return;
+      const until = performance.now() + BVH_BUDGET_MS;
+      while (pending.length && performance.now() < until) {
+        const mesh = pending.pop()!;
+        mesh.geometry.boundsTree ||= new MeshBVH(mesh.geometry);
+        mesh.raycast = acceleratedRaycast;
+        built.push(mesh);
+      }
+      if (pending.length) setTimeout(step, 0);
+      else solidMeshes.set(root, ready = built);
+    };
+    step();
+  }
+  return {
+    /** Opaque map meshes once every bounds tree is built, otherwise null. */
+    meshes: () => ready,
+    cancel() { cancelled = true; },
   };
 }
 

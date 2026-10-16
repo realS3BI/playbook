@@ -1,4 +1,4 @@
-import { roundEnd, type DemoEvent, type GrenadePath, type PlayerFrame, type PlayerLoadout, type RoundReplay } from "./demos.js";
+import { roundEnd, type Blind, type DemoEvent, type GrenadePath, type PlayerFrame, type PlayerLoadout, type RoundReplay } from "./demos.js";
 
 // Frames are stored every 8 ticks. Gaps longer than this are pauses or missing data, not movement.
 const MAX_FRAME_GAP = 0.5;
@@ -137,6 +137,24 @@ export function areaEffects(replay: RoundReplay): AreaEffect[] {
       z: event.z,
     }];
   });
+}
+
+// The screen stays white and clears over the last seconds of a flash, so short flashes never turn fully white.
+const FLASH_FADE = 2.5;
+export type Blindness = { intensity: number; remaining: number; attackerId: string };
+/** How blind each player is at `time`, 0 to 1; the strongest flash wins when several overlap. */
+export function blindnessAt(blinds: Blind[] | undefined, time: number) {
+  const result = new Map<string, Blindness>();
+  for (const blind of blinds || []) {
+    if (blind.time > time) break;
+    const remaining = blind.time + blind.duration - time;
+    if (remaining <= 0) continue;
+    const intensity = Math.min(1, remaining / FLASH_FADE);
+    const current = result.get(blind.playerId);
+    if (!current || intensity > current.intensity || (intensity === current.intensity && remaining > current.remaining))
+      result.set(blind.playerId, { intensity, remaining, attackerId: blind.attackerId });
+  }
+  return result;
 }
 
 /** Where a grenade is in flight at `time`, between its sampled points. */

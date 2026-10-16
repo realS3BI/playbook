@@ -12,7 +12,7 @@ public sealed record NadeCapture(string CaptureId, string Owner, string Name, st
     [property: JsonPropertyName("is_walking")] bool? IsWalking = null,
     [property: JsonPropertyName("is_running")] bool? IsRunning = null,
     [property: JsonPropertyName("is_stepping")] bool? IsStepping = null,
-    [property: JsonPropertyName("click_type")] string? ClickType = null, string EditRevision = "");
+    [property: JsonPropertyName("click_type")] string? ClickType = null, string EditRevision = "", string FlightPath = "");
 
 // Only this plugin writes captures. MatchZy remains the sole in-game writer of savednades.json.
 public static class NadeCaptureFile
@@ -26,19 +26,20 @@ public static class NadeCaptureFile
 
     public static NadeCapture CreateNew(string owner, string name, string displayName, string map,
         NadeKind kind, Coordinates start, Coordinates angles, Coordinates target,
-        string technique, string trace, ThrowAttributes? attributes = null, string team = "", float? flightDuration = null) => new(Guid.NewGuid().ToString("N"), owner, name, map,
+        string technique, string trace, ThrowAttributes? attributes = null, string team = "", float? flightDuration = null, string flightPath = "") => new(Guid.NewGuid().ToString("N"), owner, name, map,
         Vector(start), Vector(angles), Vector(target), DateTimeOffset.UtcNow.ToString("O"),
         kind switch
         {
             NadeKind.Smoke => "Smoke", NadeKind.Flash => "Flash", NadeKind.HE => "HE",
             NadeKind.Fire => "Molly", NadeKind.Decoy => "Decoy", _ => ""
         }, displayName, technique, technique, trace, true, team, flightDuration,
-        attributes?.IsJumpthrow, attributes?.IsCrouch, attributes?.IsWalking, attributes?.IsRunning, attributes?.IsStepping, attributes?.ClickType);
+        attributes?.IsJumpthrow, attributes?.IsCrouch, attributes?.IsWalking, attributes?.IsRunning, attributes?.IsStepping, attributes?.ClickType,
+        FlightPath: flightPath);
 
     public static NadeCapture CreateReplacement(NadeLineup original, NadeKind kind, Coordinates start,
-        Coordinates angles, Coordinates target, string technique, string trace, ThrowAttributes attributes, float duration) =>
+        Coordinates angles, Coordinates target, string technique, string trace, ThrowAttributes attributes, float duration, string flightPath = "") =>
         CreateNew(original.Owner, original.Name, original.Title, original.Map, kind, start, angles, target,
-            technique, trace, attributes, original.Team, duration) with { NewLineup = false, EditRevision = original.Revision };
+            technique, trace, attributes, original.Team, duration, flightPath) with { NewLineup = false, EditRevision = original.Revision };
 
     public static void Write(string path, NadeCapture capture)
     {

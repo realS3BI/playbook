@@ -84,6 +84,11 @@ test("scenes are exported once per map version and replaced files are removed", 
     assert.equal(await refreshMapScenes({ ...options, maps: ["de_mirage"] }), 0);
     assert.deepEqual(built, ["de_mirage"], "an unchanged archive is not exported again");
 
+    const oldPipeline = await readSceneManifest(directory);
+    oldPipeline.maps.de_mirage.pipeline = MAP_SCENE_PIPELINE - 1;
+    await writeFile(join(directory, "manifest.json"), JSON.stringify(oldPipeline));
+    assert.equal(await refreshMapScenes({ ...options, maps: ["de_mirage"] }), 1, "pipeline changes replace cached scenes even when the map archive is unchanged");
+
     await archive("de_mirage", "version 2 is longer");
     assert.equal(await refreshMapScenes({ ...options, maps: ["de_mirage"] }), 1);
     const second = (await readSceneManifest(directory)).maps.de_mirage;

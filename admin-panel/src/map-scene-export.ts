@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { mapSceneSourcePath, type SceneBuild } from "./map-scenes.js";
+import { hiddenMapEntities, hiddenMapPlacement, type HiddenMapEntity } from "./map-scene-entities.js";
 
 // Maps with many textures take well over 15 minutes on two CPUs.
 const EXPORT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -40,6 +41,14 @@ export async function exportMapSources({ viewer, gameDir, map, workDir, signal }
     "--gltf_export_materials", "-o", join(workDir, "world"), "--game", game], signal);
   const world = join(workDir, "world.glb");
   await stat(world);
+  // Keep the per-instance visibility state, which the world glTF export ignores.
+  const entitiesDir = join(workDir, "entities");
+  await mkdir(entitiesDir, { recursive: true });
+  await runViewer(viewer, ["-i", archive, "--vpk_extensions", "vents_c", "-d", "-o", entitiesDir, "--game", game], signal);
+  const hiddenEntities: HiddenMapEntity[] = [];
+  for (const entry of await readdir(entitiesDir, { recursive: true })) {
+    if (entry.endsWith(".vents")) hiddenEntities.push(...hiddenMapEntities(await readFile(join(entitiesDir, entry), "utf8")));
+  }
   let lightmap: string | null = join(workDir, "irradiance.png");
   try {
     await runViewer(viewer, ["-i", archive, "--vpk_filepath", `maps/${map}/lightmaps/irradiance.vtex_c`, "--texture_decode_flags", "ForceLDR",
@@ -49,7 +58,7 @@ export async function exportMapSources({ viewer, gameDir, map, workDir, signal }
     if (signal?.aborted) throw error;
     lightmap = null;
   }
-  return { world, lightmap };
+  return { world, lightmap, hiddenEntities };
 }
 
 // Source 2 Viewer keeps every UV set in shader order. The lightmap set lies inside the atlas,
@@ -66,7 +75,7 @@ export function lightmapCoordinates(primitive: { getAttribute(name: string): any
 
 // Keeps colour textures, normals and the texture and lightmap UV sets. Lighting comes from the baked atlas,
 // so normal, roughness and occlusion maps only add download size.
-export async function optimizeMapScene(world: string, lightmap: string | null, { textureSize = 512, lightmapSize = 4096, level = "high" as "medium" | "high" } = {}): Promise<SceneBuild> {
+export async function optimizeMapScene(world: string, lightmap: string | null, { textureSize = 512, lightmapSize = 4096, level = "high" as "medium" | "high", hiddenEntities = [] as HiddenMapEntity[] } = {}): Promise<SceneBuild> {
   const [{ Logger, NodeIO }, { ALL_EXTENSIONS }, functions, { MeshoptEncoder }, { default: sharp }] = await Promise.all([
     import("@gltf-transform/core"), import("@gltf-transform/extensions"), import("@gltf-transform/functions"), import("meshoptimizer"), import("sharp"),
   ]);
@@ -76,6 +85,11 @@ export async function optimizeMapScene(world: string, lightmap: string | null, {
   const document = await io.read(world);
   document.setLogger(new Logger(Logger.Verbosity.ERROR));
   const root = document.getRoot();
+  // Remove placements before flatten/join erase their identity. Never dispose a
+  // shared mesh here: visible props elsewhere may use that same geometry.
+  for (const node of root.listNodes()) {
+    if (node.getMesh() && hiddenMapPlacement(node.getName(), node.getWorldTranslation(), hiddenEntities)) node.dispose();
+  }
   const attributes = ["POSITION", "NORMAL", "TEXCOORD_0", "TEXCOORD_1", "COLOR_0"];
   for (const mesh of root.listMeshes()) for (const primitive of mesh.listPrimitives()) {
     const material = primitive.getMaterial();
@@ -110,6 +124,6 @@ export async function buildMapScene({ viewer, gameDir, map, workRoot, signal }: 
   const workDir = join(workRoot, `${map}-${process.pid}`);
   try {
     const sources = await exportMapSources({ viewer, gameDir, map, workDir, signal });
-    return await optimizeMapScene(sources.world, sources.lightmap);
+    return await optimizeMapScene(sources.world, sources.lightmap, { hiddenEntities: sources.hiddenEntities });
   } finally { await rm(workDir, { recursive: true, force: true }); }
 }

@@ -4,6 +4,7 @@ import { isLineupTeam } from "../shared/lineup-teams.js";
 import { validAccess, cssFlags, legacyRole } from "../shared/authorization.js";
 import { CLICK_TYPES, THROW_FLAGS, THROW_ATTRIBUTE_FIELDS, MOVEMENT_FLAGS, movementType, movementPatch } from "../shared/throw-attributes.js";
 import { flagsForRole, SETTING_KEYS } from "./policy.js";
+import { parseFlightPath } from "../shared/grenade-flight.js";
 
 const STEAM64_RE = /^[0-9]{17}$/;
 const NAMES_WITHOUT_SLASHES_RE = /^[^\\/]+$/;
@@ -164,7 +165,8 @@ export function sanitizeNades(entries) {
     }
     const throwTechnique = String(entry.throwTechnique ?? "").trim();
     const throwTrace = String(entry.throwTrace ?? "").trim();
-    if (throwTechnique.length > 500 || throwTrace.length > 120_000) {
+    const flightPath = String(entry.flightPath ?? "").trim();
+    if (throwTechnique.length > 500 || throwTrace.length > 120_000 || flightPath.length > 60_000) {
       throw new Error("Captured throw details are too large");
     }
     if (displayName.length > 120 || /[\u0000-\u001f\u007f]/.test(displayName)) {
@@ -224,6 +226,8 @@ export function sanitizeNades(entries) {
     if (entry.flightDuration !== undefined) cleanEntry.flightDuration = entry.flightDuration;
     if (throwTechnique) cleanEntry.throwTechnique = throwTechnique;
     if (throwTrace) cleanEntry.throwTrace = throwTrace;
+    // Recorded grenade path up to the detonation (shared/grenade-flight.ts).
+    if (parseFlightPath(flightPath).length) cleanEntry.flightPath = flightPath;
     if (landingPos) cleanEntry.landingPos = landingPos;
     // Where the grenade left after a run-up or jump; lineupPos stays the spot to aim from.
     if (releasePos && releaseAng) Object.assign(cleanEntry, { releasePos, releaseAng });

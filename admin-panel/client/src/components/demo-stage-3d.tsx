@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { RefreshCw } from "lucide-react";
 import { EYE_HEIGHT, SOURCE_UNIT_METRES, VERTICAL_FOV_DEGREES } from "../../../shared/map-scene";
-import { areaEffects, bombAt, frameAt, grenadeAt, loadoutAt, loadoutsById, type AreaEffect } from "../../../shared/demo-replay";
-import { loadoutSummary, type DemoPlayer, type PlayerFrame, type RoundReplay } from "../../../shared/demos";
-import { acquireMapScene, mountMapScene, viewExposure, type MapSceneInfo } from "../lib/map-scene";
+import { areaEffects, blindnessAt, bombAt, frameAt, grenadeAt, loadoutAt, loadoutsById, type AreaEffect, type Blindness } from "../../../shared/demo-replay";
+import { itemLabel, loadoutSummary, weaponClass, type DemoPlayer, type PlayerFrame, type RoundReplay } from "../../../shared/demos";
+import { acquireMapScene, mountMapScene, prepareRaycasts, viewExposure, type MapSceneInfo } from "../lib/map-scene";
+import { createFigureKit, Figure, type FigurePalette } from "../lib/demo-figures";
+import { createShotLayer } from "../lib/demo-shots";
 import { worldToRadar, type RadarCalibration } from "../lib/nade-radar";
 import { api } from "../lib/api";
 import { serverNow } from "../lib/live";
@@ -86,6 +88,7 @@ export default function DemoStage3d(props: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelRefs = useRef(new Map<string, HTMLDivElement>());
+  const flashRef = useRef<HTMLDivElement>(null);
   const live = useRef(props);
   live.current = props;
   const [phase, setPhase] = useState<Phase>({ kind: "manifest" });
@@ -126,24 +129,28 @@ export default function DemoStage3d(props: Props) {
       const owned: { dispose(): void }[] = [];
       const own = <T extends { dispose(): void }>(value: T) => { owned.push(value); return value; };
 
-      // Players: a capsule body and a head that turns with the view. The X-ray copy only draws
-      // where walls cover the player, so visible players keep their normal look.
+      // Players: a figure with legs that walk, arms that hold the active weapon and a head that
+      // turns with the view. The X-ray copy is the same figure in one translucent colour that only
+      // draws where the map covers it. It renders after the map and before the figures, so it tests
+      // against walls alone: a visible player never shows its own hidden limbs or someone behind it.
+      // Clicks aim at an invisible capsule around the player.
       const colors = { 2: token("--side-t", "#de9a3a"), 3: token("--side-ct", "#6aa9ec") } as Record<number, THREE.Color>;
       const brand = token("--brand", "#80cabc");
+      const kit = own(createFigureKit());
       const bodyGeometry = own(new THREE.CapsuleGeometry(13 * U, 32 * U, 4, 12));
-      const headGeometry = own(new THREE.SphereGeometry(7.5 * U, 16, 12));
-      const visorGeometry = own(new THREE.BoxGeometry(9 * U, 3 * U, 4 * U));
       const ringGeometry = own(new THREE.RingGeometry(20 * U, 24 * U, 40).rotateX(-Math.PI / 2));
-      const gazeGeometry = own(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 44 * U)]));
+      const glareGeometry = own(new THREE.IcosahedronGeometry(11, 2));
+      const gazeGeometry = own(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 6), new THREE.Vector3(0, 0, 50)]));
       const solid = (color: THREE.Color) => own(new THREE.MeshLambertMaterial({ color }));
-      const sideMaterials = new Map<number, { body: THREE.Material; xray: THREE.Material; gaze: THREE.Material }>();
+      const sideMaterials = new Map<number, { palette: FigurePalette; xray: THREE.Material; gaze: THREE.Material }>();
       const materialsFor = (side: number) => {
         let entry = sideMaterials.get(side);
         if (!entry) {
           const color = colors[side] || new THREE.Color("#a3b3c3");
           entry = {
-            body: solid(color),
-            xray: own(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthFunc: THREE.GreaterDepth })),
+            palette: { cloth: solid(color), dark: solid(color.clone().multiplyScalar(0.45)) },
+            // Custom blending keeps the translucency while the material stays in the opaque pass, which renderOrder sorts.
+            xray: own(new THREE.MeshBasicMaterial({ color, opacity: 0.45, blending: THREE.CustomBlending, depthWrite: false, depthFunc: THREE.GreaterDepth })),
             gaze: own(new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 })),
           };
           sideMaterials.set(side, entry);
@@ -151,41 +158,62 @@ export default function DemoStage3d(props: Props) {
         return entry;
       };
       const deadMaterial = own(new THREE.MeshLambertMaterial({ color: 0x5d6873, transparent: true, opacity: 0.7 }));
-      const visorMaterial = solid(new THREE.Color(0x10161d));
       const ringMaterial = own(new THREE.MeshBasicMaterial({ color: brand, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
 
-      type Actor = { root: THREE.Group; pose: THREE.Group; body: THREE.Mesh; head: THREE.Group; headMesh: THREE.Mesh; gaze: THREE.Line; xray: THREE.Group; xrayBody: THREE.Mesh; xrayHead: THREE.Mesh; ring: THREE.Mesh; side: number; alive: boolean };
+      // `step` follows the player between updates to drive the walk cycle.
+      type Actor = { root: THREE.Group; pose: THREE.Group; figure: Figure; gaze: THREE.Line; xray: Figure; hit: THREE.Mesh; ring: THREE.Mesh; glare: THREE.Mesh; side: number; alive: boolean; step: { time: number; x: number; y: number; speed: number; phase: number } | null };
       const actors = new Map<string, Actor>();
       const actorFor = (player: PlayerFrame) => {
         let actor = actors.get(player.id);
         if (!actor) {
-          const root = new THREE.Group(), pose = new THREE.Group(), head = new THREE.Group(), xray = new THREE.Group();
-          const body = new THREE.Mesh(bodyGeometry), headMesh = new THREE.Mesh(headGeometry), visor = new THREE.Mesh(visorGeometry, visorMaterial);
+          const root = new THREE.Group(), pose = new THREE.Group();
+          const figure = new Figure(kit), xray = new Figure(kit);
+          figure.root.scale.setScalar(U);
+          xray.root.scale.setScalar(U);
+          figure.root.traverse(object => { object.renderOrder = 2; });
+          xray.root.traverse(object => { object.renderOrder = 1; });
           const gaze = new THREE.Line(gazeGeometry);
-          const xrayBody = new THREE.Mesh(bodyGeometry), xrayHead = new THREE.Mesh(headGeometry);
+          figure.head.add(gaze);
+          // A flashed player glows around the head, readable from any camera.
+          const glare = new THREE.Mesh(glareGeometry, own(new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false })));
+          glare.renderOrder = 3;
+          glare.visible = false;
+          figure.head.add(glare);
+          const hit = new THREE.Mesh(bodyGeometry, ringMaterial);
+          hit.visible = false;
+          hit.position.y = 29 * U;
+          hit.userData.id = player.id;
           const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-          body.userData.id = player.id;
-          visor.position.set(0, 0, 6.5 * U);
-          head.add(headMesh, visor, gaze);
-          xrayBody.renderOrder = xrayHead.renderOrder = 2;
-          xrayHead.scale.setScalar(1.12);
-          xray.add(xrayBody, xrayHead);
-          pose.add(body, head, xray);
+          pose.add(figure.root, xray.root, hit);
           ring.position.y = 1 * U;
           root.add(pose, ring);
           scene.add(root);
-          actor = { root, pose, body, head, headMesh, gaze, xray, xrayBody, xrayHead, ring, side: 0, alive: true };
+          actor = { root, pose, figure, gaze, xray, hit, ring, glare, side: 0, alive: true, step: null };
           actors.set(player.id, actor);
         }
         if (actor.side !== player.side || actor.alive !== player.health > 0) {
           const materials = materialsFor(player.side);
           actor.side = player.side;
           actor.alive = player.health > 0;
-          actor.body.material = actor.headMesh.material = actor.alive ? materials.body : deadMaterial;
-          actor.xrayBody.material = actor.xrayHead.material = materials.xray;
+          actor.figure.paint(actor.alive ? materials.palette : deadMaterial);
+          actor.xray.tint(materials.xray);
           actor.gaze.material = materials.gaze;
         }
         return actor;
+      };
+      // Walking speed from the distance covered since the last update; a jump in time starts over.
+      const stride = (actor: Actor, player: PlayerFrame, time: number) => {
+        const last = actor.step;
+        const elapsed = last ? time - last.time : 0;
+        if (!last || elapsed < 0 || elapsed > 0.5) {
+          actor.step = { time, x: player.x, y: player.y, speed: 0, phase: last?.phase || 0 };
+          return actor.step;
+        }
+        if (elapsed === 0) return last;
+        const distance = Math.hypot(player.x - last.x, player.y - last.y);
+        const speed = last.speed + (Math.min(400, distance / elapsed) - last.speed) * Math.min(1, elapsed * 8);
+        actor.step = { time, x: player.x, y: player.y, speed, phase: (last.phase + distance / 166 * Math.PI * 2) % (Math.PI * 2) };
+        return actor.step;
       };
 
       // Smoke clouds and fire areas are schematic: about the size of the real effect, without its shape.
@@ -274,10 +302,14 @@ export default function DemoStage3d(props: Props) {
       const position = new THREE.Vector3(), scratch = new THREE.Vector3();
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       let players: PlayerFrame[] = [];
+      let blinded = new Map<string, Blindness>();
+      const raycasts = prepareRaycasts(loaded.root);
+      const shotLayer = createShotLayer(scene, raycasts.meshes);
       const update = (time: number) => {
         const { replay, focusId, xray } = live.current;
         if (round?.replay !== replay) { round?.dispose(); round = buildRound(replay); }
         players = frameAt(replay, time);
+        blinded = blindnessAt(replay.blinds, time);
         const seen = new Set<string>();
         let carrier: string | undefined;
         for (const player of players) {
@@ -285,20 +317,32 @@ export default function DemoStage3d(props: Props) {
           const actor = actorFor(player);
           toScene(player.x, player.y, player.z, actor.root.position);
           actor.root.rotation.y = THREE.MathUtils.degToRad(player.yaw);
-          const crouch = 1 - 0.3 * (player.duck || 0);
-          actor.body.scale.y = crouch;
-          // Slightly larger than the body, so the X-ray copy never flickers against the visible model.
-          actor.xrayBody.scale.set(1.08, crouch * 1.04, 1.08);
-          actor.body.position.y = actor.xrayBody.position.y = 29 * U * crouch;
-          actor.head.position.y = actor.xrayHead.position.y = (actor.alive ? eyeHeight(player) : 60) * U;
-          actor.head.rotation.x = THREE.MathUtils.degToRad(player.pitch || 0);
+          const gear = loadoutAt(round.loadouts.get(player.id), time);
+          const step = stride(actor, player, time);
+          const pose = {
+            eye: actor.alive ? eyeHeight(player) : EYE_HEIGHT.standing,
+            duck: actor.alive ? player.duck || 0 : 0,
+            pitch: actor.alive ? player.pitch || 0 : 0,
+            speed: actor.alive ? step.speed : 0,
+            phase: step.phase,
+            weapon: actor.alive && player.weapon ? weaponClass(player.weapon) : null,
+            helmet: !!gear?.helmet,
+            armor: !!gear && gear.armor > 0,
+          };
+          actor.figure.pose(pose);
+          actor.xray.root.visible = xray && actor.alive;
+          if (actor.xray.root.visible) actor.xray.pose(pose);
+          actor.hit.scale.y = 1 - 0.3 * (player.duck || 0);
+          actor.hit.position.y = 29 * U * actor.hit.scale.y;
           // The fallen body lies backwards from where the player stood.
           actor.pose.rotation.x = actor.alive ? 0 : -Math.PI / 2;
           actor.gaze.visible = actor.alive;
-          actor.xray.visible = xray && actor.alive;
+          const blind = actor.alive ? blinded.get(player.id)?.intensity || 0 : 0;
+          actor.glare.visible = blind > 0.02;
+          if (actor.glare.visible) (actor.glare.material as THREE.MeshBasicMaterial).color.setScalar(0.25 + 0.75 * blind);
           actor.ring.visible = player.id === focusId;
           actor.root.visible = true;
-          if (actor.alive && round.loadouts.size && loadoutSummary(loadoutAt(round.loadouts.get(player.id), time)?.items || []).bomb) carrier = player.id;
+          if (actor.alive && gear && loadoutSummary(gear.items).bomb) carrier = player.id;
         }
         for (const [id, actor] of actors) if (!seen.has(id)) actor.root.visible = false;
 
@@ -390,10 +434,17 @@ export default function DemoStage3d(props: Props) {
         const scoped = !!target && target.health > 0 && !!target.scoped;
         const zoom = scoped ? SCOPE_ZOOM : 1;
         if (view.zoom !== zoom) { view.zoom = zoom; view.updateProjectionMatrix(); }
+        // The game whites out a flashed player's screen; a trace of the picture stays for the review.
+        const flash = target && target.health > 0 ? blinded.get(target.id)?.intensity || 0 : 0;
+        if (flashRef.current) flashRef.current.style.opacity = String(Math.round(flash * 0.92 * 100) / 100);
         const next = target && target.health > 0 ? `${scoped}:${scoped && SNIPER.test(target.weapon)}` : "";
         if (next !== egoState) { egoState = next; setEgo(target && target.health > 0 ? { scoped, sniper: scoped && SNIPER.test(target.weapon) } : null); }
         // Ego view hides the own model, which would otherwise fill the picture.
-        for (const [id, actor] of actors) actor.pose.visible = !(target && id === target.id && actor.alive);
+        for (const [id, actor] of actors) {
+          const own = !!target && id === target.id && actor.alive;
+          actor.pose.visible = !own;
+          actor.ring.visible = !own && id === live.current.focusId;
+        }
       };
 
       // Names follow the players on screen; with X-ray off they would give away hidden players.
@@ -411,6 +462,14 @@ export default function DemoStage3d(props: Props) {
             element.style.transform = `translate(${Math.round((position.x + 1) / 2 * clientWidth)}px, ${Math.round((1 - position.y) / 2 * clientHeight)}px)`;
             element.dataset.side = player.side === 2 ? "t" : "ct";
             element.dataset.focus = String(id === focusId);
+            const blind = blinded.get(id), mark = element.querySelector("mark")!;
+            const flashed = blind ? `geblendet ${blind.remaining.toLocaleString("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s` : "";
+            if (mark.textContent !== flashed) mark.textContent = flashed;
+            mark.hidden = !blind;
+            element.dataset.blind = String(!!blind);
+            const weapon = element.querySelector("em")!, label = player.weapon ? itemLabel(player.weapon) : "";
+            if (weapon.textContent !== label) weapon.textContent = label;
+            weapon.hidden = !label;
             (element.lastElementChild!.firstElementChild as HTMLElement).style.width = `${Math.max(0, Math.min(100, player.health))}%`;
           } else element.hidden = true;
         }
@@ -457,7 +516,7 @@ export default function DemoStage3d(props: Props) {
       };
 
       const keys = new Set<string>();
-      let fast = false, pace = 1, dirty = true, adapting = false, lastTime = NaN, lastNow = performance.now(), lastProps = "", frame = 0;
+      let fast = false, pace = 1, dirty = true, adapting = false, shooting = false, lastTime = NaN, lastNow = performance.now(), lastProps = "", frame = 0;
       const toFree = () => {
         if (active === "free") return;
         takeOver();
@@ -509,9 +568,10 @@ export default function DemoStage3d(props: Props) {
           pulse.scale.setScalar((20 + 60 * phase) * U);
           pulseMaterial.opacity = 0.9 * (1 - phase);
         }
-        if (!dirty && !pointing && !planted && !adapting) return;
+        if (!dirty && !pointing && !planted && !adapting && !shooting) return;
         dirty = false;
         placeCamera();
+        shooting = shotLayer.update(lastTime, props.replay, current.ego ? props.focusId : "");
         view.updateMatrixWorld();
         adapting = adaptExposure(now, dt);
         renderer.render(scene, view);
@@ -522,6 +582,7 @@ export default function DemoStage3d(props: Props) {
         const { width, height } = stage.getBoundingClientRect();
         if (!width || !height) return;
         renderer.setSize(width, height, false);
+        shotLayer.resize(width, height);
         setUnit(height / 1080);
         view.aspect = width / height;
         view.updateProjectionMatrix();
@@ -540,7 +601,7 @@ export default function DemoStage3d(props: Props) {
         const { onFocus, onPoint, calibration } = live.current;
         raycaster.setFromCamera(new THREE.Vector2(x, y), view);
         raycaster.far = Infinity;
-        const bodies = [...actors.values()].filter(actor => actor.root.visible && actor.alive && actor.pose.visible).map(actor => actor.body);
+        const bodies = [...actors.values()].filter(actor => actor.root.visible && actor.alive && actor.pose.visible).map(actor => actor.hit);
         const player = raycaster.intersectObjects(bodies, false)[0];
         if (player && onFocus) return onFocus(player.object.userData.id);
         if (!onPoint || !calibration) return;
@@ -639,6 +700,8 @@ export default function DemoStage3d(props: Props) {
         window.removeEventListener("keyup", keyUp);
         window.removeEventListener("blur", stop);
         round?.dispose();
+        shotLayer.dispose();
+        raycasts.cancel();
         for (const actor of actors.values()) scene.remove(actor.root);
         scene.remove(bomb, pulse, pointerMark);
         owned.forEach(item => item.dispose());
@@ -658,7 +721,7 @@ export default function DemoStage3d(props: Props) {
     {ready && <div className="demo-3d-labels" aria-hidden="true">
       {roster.map((player, index) => <div key={player.id} hidden className="demo-3d-label"
         ref={element => { if (element) labelRefs.current.set(player.id, element); else labelRefs.current.delete(player.id); }}>
-        <span><b>{index + 1}</b>{player.name}</span><i><s /></i>
+        <span><b>{index + 1}</b>{player.name}</span><mark hidden /><em hidden /><i><s /></i>
       </div>)}
     </div>}
     {ready && ego && !ego.sniper && <div className="demo-3d-crosshair" aria-hidden="true"><CrosshairGlyph style="gap" unit={unit} /></div>}
@@ -666,6 +729,7 @@ export default function DemoStage3d(props: Props) {
     {ready && !captured && <div className="demo-3d-enter" aria-hidden="true">{props.mode === "ego" ? "Klicken, um frei zu fliegen" : "Klicken, um die Kamera zu steuern"}</div>}
     {paceLabel && <div className="demo-3d-pace" role="status">{paceLabel}</div>}
     {ready && ego?.sniper && <div className="demo-3d-scope" aria-hidden="true" />}
+    {ready && <div ref={flashRef} className="demo-3d-flash" aria-hidden="true" />}
     {(phase.kind === "manifest" || phase.kind === "loading") && <div className="demo-3d-status" role="status">
       <Spinner aria-hidden="true" />
       <p>{phase.kind === "loading" && phase.loaded >= phase.total ? "3D-Karte wird aufbereitet …" : `3D-Karte von ${mapLabel} wird geladen …`}</p>
