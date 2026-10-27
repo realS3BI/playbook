@@ -70,7 +70,7 @@ public sealed class InGameMenu(MenuPage root, string map)
     public string Breadcrumb => string.Join(" › ", _history.Reverse().Select(frame => frame.Page)
         .Append(Current).Select((page, index) => index == 0 ? "Home" : MenuRenderer.Plain(page.Title, 36)));
 
-    // One line above the description: what the selected row is, or where the player is in the list.
+    // Context for the selected row; pagination is shown in the navigation.
     public string Status
     {
         get
@@ -78,9 +78,7 @@ public sealed class InGameMenu(MenuPage root, string map)
             var item = Selected;
             if (item is { Status.Length: > 0 }) return item.Status;
             if (item is { Enabled: false }) return "Nicht verfügbar";
-            var count = Current.Items.Count;
-            var entries = count == 1 ? "1 Eintrag" : $"{count} Einträge";
-            return PageCount > 1 ? $"{entries} · Seite {Page + 1}/{PageCount}" : entries;
+            return "";
         }
     }
 

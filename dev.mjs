@@ -84,7 +84,6 @@ COMPOSE_PROJECT_NAME überschreibt den Standard playbook-dev.`);
   console.log(`Starte die Entwicklungsumgebung für ${publicUrl.origin}`);
   console.log(`Browser und Steam-Callback: ${publicUrl.origin}, API lokal unter http://127.0.0.1:${apiPort}.`);
   if (https) console.log(`Der HTTPS-Proxy muss auf http://127.0.0.1:${port} weiterleiten.`);
-  if (https) alignTailscaleServe(publicUrl, port);
   console.log("Vite lädt Frontend-Änderungen direkt. API und Demo-Worker starten nach Codeänderungen in etwa einer Sekunde neu.");
   console.log("Nach neuen Paketen in admin-panel/package.json die Umgebung neu starten.");
   if (admin) console.log("Die konfigurierte Steam-ID erhält beim Start lokale Admin-Rechte, auch bei einem bestehenden Konto.");
@@ -132,20 +131,6 @@ COMPOSE_PROJECT_NAME überschreibt den Standard playbook-dev.`);
 
 const windows = process.platform === "win32";
 
-// A changed Vite port otherwise leaves Tailscale Serve on the old target, and the browser gets HTTP 502.
-function alignTailscaleServe(publicUrl, port) {
-  const status = spawnSync("tailscale", ["serve", "status", "--json"], { encoding: "utf8", timeout: 10_000 });
-  if (status.status !== 0) return;
-  const httpsPort = publicUrl.port || "443";
-  const proxy = JSON.parse(status.stdout || "{}").Web?.[`${publicUrl.hostname}:${httpsPort}`]?.Handlers?.["/"]?.Proxy;
-  const target = `http://127.0.0.1:${port}`;
-  if (!proxy || proxy === target) return;
-  const args = ["serve", "--bg", `--https=${httpsPort}`, target];
-  if (spawnSync("tailscale", args, { stdio: "ignore", timeout: 10_000 }).status !== 0) {
-    throw new Error(`Tailscale leitet ${publicUrl.origin} an ${proxy} weiter, Vite läuft aber auf ${target}. Ausführen: tailscale ${args.join(" ")}`);
-  }
-  console.log(`Tailscale leitet ${publicUrl.origin} jetzt an ${target} weiter (bisher ${proxy}).`);
-}
 const turboBin = join("node_modules", ".bin", windows ? "turbo.cmd" : "turbo");
 
 main().catch(error => {

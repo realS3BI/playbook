@@ -50,11 +50,11 @@ Beispiel für eine Mirage-Taktik:
 
 | Platz | Besetzung | Schritt | Zeitpunkt |
 | --- | --- | --- | --- |
-| Support A | Sebastian | CT-Smoke werfen, verknüpftes Lineup öffnen | Auf Go |
+| Support A | Spieler A | CT-Smoke werfen, verknüpftes Lineup öffnen | Auf Go |
 | Entry | Spieler B | Aus der Rampe gehen und unter Balkon prüfen | Sobald die Smoke steht |
 | Support B | Ersatzspieler C | Über den Palast flashen | Auf den Entry-Call |
 
-Sebastian sieht in `Meine Aufgaben` die gemeinsame Erklärung und die Schritte von Support A. Über `Teamübersicht` kann er die anderen Aufgaben ansehen. Ein Spieler ohne Besetzung erhält einen klaren Hinweis und kann die Teamübersicht öffnen. Es werden ihm keine Aufgaben von Platz 1 als Ersatz angezeigt.
+Spieler A sieht in `Meine Aufgaben` die gemeinsame Erklärung und die Schritte von Support A. Über `Teamübersicht` kann er die anderen Aufgaben ansehen. Ein Spieler ohne Besetzung erhält einen klaren Hinweis und kann die Teamübersicht öffnen. Es werden ihm keine Aufgaben von Platz 1 als Ersatz angezeigt.
 
 ## Teamverwaltung und Rechte
 
@@ -150,43 +150,7 @@ Die Umsetzung erhält Tests an den neuen Modul-Interfaces und über die authenti
 Taktische Zeichnungen, zusätzliche Bilder, Eco-Filter, öffentliche Vorlagen, gemeinsame Schrittschaltung und Anbindung an HUD oder MatchZy können folgen. Die erste Webintegration benötigt diese Erweiterungen nicht. Ein Datenimport aus `cs-playbook` ist ausdrücklich ausgeschlossen.
 
 
-## Recherche zum alten Projekt
-
-Untersucht wurde das private Repository `realS3BI/cs-playbook`, Branch `master`, Commit `62bd2945a1205a87e0f49537d3179170beee2d4b`, am 5. Oktober 2026. Die Aussagen beruhen auf dem Quellcode dieses Stands. Die alte Anwendung und ihre produktive Convex-Datenbank wurden nicht ausgeführt oder ausgelesen.
-
-### Persönliche Ansicht und Spielrollen
-
-Die README verspricht Rollen wie Entry, Lurker, IGL, AWPer und Support. Das tatsächliche Modell speichert jedoch fünf feste Aufgabenlisten `player1` bis `player5`. Ein Benutzer hat eine `playerNumber` zwischen 0 und 5. Seine Verwaltungsrolle `superadmin`, `leader` oder `player` ist ein anderes Feld. Frei definierbare Spielrollen oder eine unterschiedliche Besetzung je Taktik sind darin nicht vorgesehen. [README](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/README.md#L9-L16), [Benutzerschema](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/schemas/users.ts#L6-L31), [Taktikschema](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/schemas/strats.ts#L27-L49).
-
-Die Seite `/live` ermittelt Team und Spielernummer über den angemeldeten Benutzer und öffnet zunächst dessen Tab. `canViewOtherPlayers` steht fest auf `true`. Jeder Spieler kann damit alle fünf Aufgabenlisten ansehen. Auch `ActiveStrat` zeigt alle fünf Tabs. Der vorhandene Nutzen ist die persönliche Vorauswahl; eine Beschränkung auf ausschließlich eigene Schritte gibt es im untersuchten Stand nicht. Die alte Dokumentation beschreibt dagegen noch einen abweichenden Ablauf mit Eingabe von Team-ID und Spielernummer. [Live-Ansicht](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/live/page.tsx#L19-L36), [Tabauswahl](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/live/page.tsx#L120-L195), [Dashboardansicht](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/components/active-strat.tsx#L42-L86), [abweichende Beschreibung](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/docs/LIVE_VIEW.md#L11-L32).
-
-Die Aufgaben erscheinen als geordnete Karten mit Beschreibung, optionaler Position, Timing und optionalem Bild. Timing ist freier Text, etwa eine Uhrzeit oder "nach Flash". Einen laufenden Rundentimer oder eine automatische Schrittsteuerung bildet diese Ansicht nicht ab. [Aufgabendarstellung](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/live/page.tsx#L219-L267), [Timing-Eingabe](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step3/page.tsx#L295-L305).
-
-### Teamverwaltung und Taktikablauf
-
-| Bereich | Im Quellcode vorhanden | Grenze für die Übernahme |
-| --- | --- | --- |
-| Mitgliedschaft | Ein `teamId` und eine Spielernummer direkt am Benutzer | Keine eigenständigen Mitgliedschaften für mehrere Teams. |
-| Teamgründung | Team mit Status `pending`; Genehmigung setzt den Ersteller als `leader` ins Team | Die Freigabe durch Plattform-Admins ist eine alte Produktentscheidung. |
-| Beitritt | Anfrage mit Team-ID und gewünschter Spielernummer; Annahme oder Ablehnung | Kein Einladungslinksystem. Die Annahme überschreibt die Teamzuordnung des Benutzers. |
-| Mitgliederverwaltung | Spielernummer ändern und Mitglied entfernen | Die Mutationen prüfen keine eindeutige Belegung der fünf Nummern. |
-| Taktiken | Teambezogene Datensätze mit Map, Seite, Beschreibung und Aufgaben | Keine unabhängige Besetzung pro Taktik oder Trainingseinheit. |
-
-Quellen zur Tabelle: [Benutzerschema](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/schemas/users.ts#L22-L31), [Teamgründung und Freigabe](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/teams.ts#L30-L99), [Beitritt](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/teamJoinRequests.ts#L50-L103), [Mitgliederverwaltung](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/components/team-members-manager.tsx#L48-L78), [Nummernzuweisung](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/users.ts#L64-L72), [Taktikschema](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/schemas/strats.ts#L27-L49).
-
-Der Editor hat drei Stationen: Grunddaten einschließlich Team- und Gegner-Eco, bis zu drei Übersichtsbilder, anschließend Aufgaben je Spieler. Entwürfe zwischen den Stationen liegen im `sessionStorage`. Erst beim Einreichen legt `addStrat` einen Datensatz mit Status `draft` an. Die Aufgabenfelder im Editor umfassen Beschreibung, Position und Timing. [Grunddaten](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step1/page.tsx#L63-L82), [Bilder](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step2/page.tsx#L85-L93), [Einreichen](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step3/page.tsx#L90-L134), [Aufgabenmodell des Editors](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step3/page.tsx#L18-L30).
-
-Freigeben und Aktivieren sind getrennte Vorgänge. `approveStrat` setzt `approved`; die Bibliothek fragt nur freigegebene Taktiken ab. "Aktivieren" schreibt eine einzige `activeStratId` ins Team. Die Live-Seite abonniert `getActiveStrat` über Convex und erhält den vollständigen Taktikdatensatz. Dieser Ablauf ist im Code verbunden. Es gibt dabei keinen separaten Sitzungsdatensatz, keinen eingefrorenen Veröffentlichungsstand und keine ausgewählte aktuelle Schrittnummer. `setActiveStrat` selbst prüft weder den Freigabestatus noch die Zugehörigkeit der Taktik zum Team. [Freigabe und Aktivierung](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/strats.ts#L109-L141), [Bibliothek und aktiver Datensatz](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/strats.ts#L6-L27), [Aktivierungsaufruf](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/components/strat-list.tsx#L65-L67).
-
-### Teile, die neu umgesetzt werden müssen
-
-Die geprüften Convex-Funktionen lesen und ändern Teams, Mitglieder und Taktiken anhand übergebener IDs ohne Prüfung der authentifizierten Identität oder Teammitgliedschaft. Auch `reviewedBy` kommt vom Aufrufer. Der Client verwendet einen gewöhnlichen `ConvexProvider` neben NextAuth. Die vorhandenen Rollenprüfungen in Seiten ersetzen deshalb keine abgesicherte Team-API. Diese Berechtigungsumsetzung sollte nicht übernommen werden. [Teamfunktionen](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/teams.ts#L6-L78), [Taktikfunktionen](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/strats.ts#L78-L141), [Provider](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/lib/providers.tsx#L8-L15).
-
-Die Verknüpfung mit Nades ist nur teilweise vorbereitet. Das Schema erlaubt `nadeId` plus Timing pro Schritt, der Schritt-Editor bietet dafür aber keine Eingabe. `ActiveStrat` zeigt lediglich "Nade 1" und Timing; `/live` stellt diese Referenzen nicht dar. Für das neue Projekt sollte eine Aufgabe gezielt einen Eintrag aus der vorhandenen Nades-Bibliothek referenzieren und dessen Detailansicht öffnen können. [Nade-Felder](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/convex/schemas/strats.ts#L5-L16), [bisherige Ausgabe](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/components/active-strat.tsx#L120-L138), [Editor](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step3/page.tsx#L264-L309).
-
-Auch die Bildfelder sind uneinheitlich: Der Editor speichert `images[]`, die aktive Ansicht und die Live-Seite lesen `imageUrl`. Das ist ein konkreter Grund, den alten Ablauf als fachliche Vorlage zu verwenden und die Komponenten nicht unverändert zu kopieren. [Speichern](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/player/submit/strat/step3/page.tsx#L104-L126), [Lesen](https://github.com/realS3BI/cs-playbook/blob/62bd2945a1205a87e0f49537d3179170beee2d4b/app/live/page.tsx#L163-L174).
-
-### Übernahme der bisherigen Ideen
+## Übernahme bisheriger Ideen
 
 Empfehlung für den neuen Entwurf:
 

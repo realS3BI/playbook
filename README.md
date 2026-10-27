@@ -33,33 +33,15 @@ Unter Windows oder ohne Bash funktioniert `node dev.mjs`. Auch `pnpm dev` im Pro
 node dev.mjs --admin DEINE_STEAM64_ID
 ```
 
-Für LAN oder Tailscale zusätzlich `--url http://DEINE_ADRESSE:5173` angeben. Steam-Anmeldung und Browser müssen dieselbe Adresse verwenden. Strg+C stoppt die Container; die Entwicklungsdaten bleiben im Compose-Projekt `playbook-dev` erhalten. Diese Umgebung startet keinen Gameserver. Bei bestehenden Entwicklungsdaten `COMPOSE_PROJECT_NAME=cs2-matchzy-dev` in `.env.development` beibehalten, damit dieselben Volumes verwendet werden.
-
-### HTTPS über Tailscale
-
-Auf Sebastians Mac ist die Entwicklungsadresse `https://sebastian-mac.spitz-werner.ts.net:8443`. Tailscale Serve übernimmt HTTPS und leitet an Vite auf `127.0.0.1:5173` weiter. Andere Geräte benötigen Zugang zum selben Tailnet.
-
-Die lokale `.env.development` enthält dafür zusätzlich zum Session-Secret:
-
-```dotenv
-ADMIN_PANEL_PUBLIC_URL=https://sebastian-mac.spitz-werner.ts.net:8443
-DEV_PORT=5173
-DEV_BIND_ADDRESS=127.0.0.1
-```
-
-Die Weiterleitung wird einmalig eingerichtet:
-
-```bash
-tailscale serve --bg --https=8443 http://127.0.0.1:5173
-```
-
-Danach startet `./dev.sh` die Umgebung mit dieser Adresse. Steam-Anmeldung und Vites automatisches Neuladen verwenden ebenfalls die HTTPS-Adresse. Der Vite-Port bleibt lokal erreichbar. Ein anderer interner Port lässt sich mit `--port` wählen. Besteht für die HTTPS-Adresse bereits eine Tailscale-Weiterleitung auf einen anderen Port, stellt das Skript sie beim Start auf den Vite-Port um. HTTPS benötigt diesen vorgeschalteten Proxy, Vite selbst stellt kein Zertifikat aus.
-
-Zum Entfernen ausschließlich dieser Weiterleitung: `tailscale serve --https=8443 off`. [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) speichert die mit `--bg` eingerichtete Weiterleitung über Neustarts hinweg; Docker Desktop und die Entwicklungsumgebung müssen für den Zugriff laufen.
+Für den Zugriff im LAN zusätzlich `--url http://DEINE_ADRESSE:5173` angeben. Steam-Anmeldung und Browser müssen dieselbe Adresse verwenden. Strg+C stoppt die Container; die Entwicklungsdaten bleiben im Compose-Projekt `playbook-dev` erhalten. Diese Umgebung startet keinen Gameserver. Bei bestehenden Entwicklungsdaten `COMPOSE_PROJECT_NAME=cs2-matchzy-dev` in `.env.development` beibehalten, damit dieselben Volumes verwendet werden.
 
 Ein bisher separat gestartetes Vite zuerst beenden, falls Port 5173 belegt ist. `pnpm dev:client` in `admin-panel` startet nur das Frontend und benötigt eine laufende API auf Port 8080.
 
 Die Entwicklungsumgebung startet keinen CS2-Gameserver und erhält keinen Docker-Socket. Anmeldung, Dashboard und gespeicherte Daten lassen sich lokal entwickeln; Gameserver-Steuerung und Live-Diagnosen benötigen den vollständigen Deployment-Stack.
+
+### HTTPS für die Entwicklung
+
+Für HTTPS einen eigenen Reverse Proxy einrichten und mit `--url https://playbook.example.com` starten. Der Proxy muss an den lokalen Vite-Port weiterleiten und WebSocket-Upgrades unterstützen. Vite stellt selbst kein Zertifikat aus. Der interne Port lässt sich mit `--port` wählen.
 
 ## Server betreiben
 
@@ -94,7 +76,7 @@ Bei einer Unterbrechung zeigt die Oberfläche den Verbindungsstatus und verbinde
 
 Docker-Ereignisse und Logausgaben lösen Server-Updates aus. Dateien des bestehenden Ingame-Plugins werden beobachtet. Als Rückfallebene prüft die API abonnierte Logs jede Sekunde, den Serverstatus alle zwei Sekunden, die Live-Map alle drei Sekunden und Diagnosen alle zehn Sekunden. Diese Prüfungen laufen auf dem Server; im Browser entfallen die wiederkehrenden HTTP-Abfragen. Der Ingame-Dateiabgleich und die Capture-Leases behalten ihr bestehendes Protokoll. Es gibt weiterhin keinen CS2-Gameserver im lokalen Entwicklungsstack.
 
-Ein vorgeschalteter Proxy muss WebSocket-Upgrades für `/api/live` an denselben API-Port weiterreichen. Vite und die lokale Tailscale-Weiterleitung unterstützen das bereits. In Produktion verwendet der Browser automatisch `wss://` mit der konfigurierten HTTPS-Adresse. Die Umsetzung läuft innerhalb einer API-Instanz; mehrere API-Replikate benötigen zusätzlich einen gemeinsamen Ereignisverteiler.
+Ein vorgeschalteter Proxy muss WebSocket-Upgrades für `/api/live` an denselben API-Port weiterreichen. Vite unterstützt das bereits. In Produktion verwendet der Browser automatisch `wss://` mit der konfigurierten HTTPS-Adresse. Die Umsetzung läuft innerhalb einer API-Instanz; mehrere API-Replikate benötigen zusätzlich einen gemeinsamen Ereignisverteiler.
 
 ## Team-Management und Strats
 

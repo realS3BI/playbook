@@ -12,18 +12,9 @@ Die Tonaufnahme startet ausdrücklich auf dem eingeteilten Rechner. Im Browser s
 
 Die Windows-Desktop-App bietet **Spiel und Kommunikation aufnehmen**. Zwei aktive Windows-Aufnahmegeräte werden über ihre stabilen Geräte-IDs ausgewählt und lokal gespeichert. Für neue Einstellungen schlägt die Oberfläche `Voicemeeter Out B1` und `Voicemeeter Out B2` vor. Alte Treibernamen können manuell gewählt werden. Fehlt ein gespeichertes Gerät, wird kein Standardmikrofon als Ersatz aufgenommen. Pegelanzeigen helfen vor dem Start und während der Aufnahme bei der Prüfung; vor dem Start werden sie alle 2,5 Sekunden aktualisiert. Beide Spuren verwenden dieselbe monotone Aufnahmezeitbasis und werden auf 48 kHz normalisiert. Der Recorder erfasst ausschließlich die beiden ausgewählten Aufnahmegeräte; er benötigt keine Discord-Prozessaufnahme, keinen Discord-Bot und keine CS2-Review-Verbindung.
 
-### Voicemeeter-Routing für Sebastians Setup
+### Voicemeeter-Routing einrichten
 
-A1 bleibt der Kopfhörer, A2 der Lautsprecher. Windows und Discord verwenden weiterhin B3 als Mikrofoneingang. B3 ist ein Windows-Aufnahmegerät, kein Wiedergabegerät. Die vorhandenen A1/A2-Schalter werden nicht verändert.
-
-| Kanal | B1 · Spielaufnahme | B2 · Kommunikation | B3 · Mikrofon für Anwendungen |
-| --- | --- | --- | --- |
-| Headset-Mikrofon · Hardware-Eingang 1 | Aus | An | An |
-| Voice · Discord über CABLE-A Output | Aus | An | Aus |
-| Game · CS2 über CABLE-B Output | An | Aus | Aus |
-| Musik, Browser, Default und weitere Eingänge | Aus | Aus | Aus |
-
-Gegenüber dem gezeigten Ausgangszustand werden Game → B1 und Voice → B2 zusätzlich aktiviert. Das Mikrofon liegt bereits auf B2 und B3. B2 darf danach nicht als Mikrofoneingang in Discord oder CS2 verwendet werden, weil er auch empfangene Stimmen enthält. CS2 und Discord senden an die Wiedergabegeräte CABLE-B Input beziehungsweise CABLE-A Input; Voicemeeter empfängt diese über die jeweiligen Cable-Outputs. Ingame-Calls sind in der Spielspur enthalten, wenn CS2 sie über dieselbe Ausgabe wiedergibt. Die eigene Stimme ist auf der Kommunikationsspur enthalten.
+Für getrennte Aufnahmespuren Spielton auf B1 und Kommunikation einschließlich des eigenen Mikrofons auf B2 routen. Musik, Browser und andere Quellen von beiden Aufnahmebussen ausschließen. Kopfhörer, Lautsprecher und den Mikrofoneingang für Anwendungen passend zur eigenen Hardware konfigurieren. B2 darf nicht als Mikrofoneingang in Discord oder CS2 verwendet werden, weil der Bus auch empfangene Stimmen enthält. Ingame-Calls sind in der Spielspur enthalten, wenn CS2 sie über dieselbe Ausgabe wiedergibt.
 
 Die optionale **Mikrofonzuleitung zu B2 steuern** verwendet die installierte [Voicemeeter Remote API](https://download.vb-audio.com/Download_CABLE/VoicemeeterRemoteAPI.pdf). Der Mikrofonkanal wird ausdrücklich gewählt; Standard ist Hardware-Eingang 1. Der Helfer verändert ausschließlich `Strip[i].B2`, bestätigt die Änderung durch Rücklesen und stellt beim normalen Aufnahmeende den vorherigen Zustand wieder her. B3, Mikrofon-Mute, A1/A2 und die übrigen Kanäle bleiben erhalten. Ohne verfügbare Remote API oder bei einer Kommunikationsquelle außerhalb B2 bleibt die Aufnahme möglich; die Zuleitung muss dann in Voicemeeter bedient werden. Discord-Mute und Push-to-Talk steuern diesen Mitschnitt nicht. Nach einem erzwungenen Prozessabbruch den B2-Schalter am Mikrofon prüfen, weil die Wiederherstellung dann nicht garantiert ist.
 

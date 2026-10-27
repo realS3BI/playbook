@@ -1,4 +1,5 @@
 // Lokales Live-Beispiel aus einem authentifiziert gelesenen Bibliotheksauszug.
+// PLAYBOOK_IMPORT_SOURCE muss die erwartete Herkunft des Auszugs enthalten.
 // Aufruf im Dev-API-Container: node scripts/seed-live-demo.mjs /tmp/lineups.json STEAM_ID
 import { readFile } from "node:fs/promises";
 import { MongoClient } from "mongodb";
@@ -10,7 +11,7 @@ if (process.env.NODE_ENV !== "development") throw new Error("Dieses Beispiel dar
 const [inputPath, userId] = process.argv.slice(2);
 if (!inputPath || !/^\d{17}$/.test(userId || "")) throw new Error("Bibliotheksauszug und Steam-ID angeben.");
 const input = JSON.parse(await readFile(inputPath, "utf8"));
-if (input.source !== "https://playbook.schlossers.at") throw new Error("Der Auszug muss von playbook.schlossers.at stammen.");
+if (!process.env.PLAYBOOK_IMPORT_SOURCE || input.source !== process.env.PLAYBOOK_IMPORT_SOURCE) throw new Error("PLAYBOOK_IMPORT_SOURCE auf die erwartete Herkunft des Bibliotheksauszugs setzen.");
 const incoming = sanitizeNades(input.entries);
 if (!incoming.length || incoming.length > 12 || incoming.some(nade => !Object.values(nade.reviewMedia || {}).some(file => file?.url) && !nade.lineupImages?.length)) throw new Error("Bitte 1 bis 12 Lineups mit Medien übergeben.");
 const client = new MongoClient("mongodb://mongodb:27017/cs2_admin_panel");

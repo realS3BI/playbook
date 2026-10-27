@@ -11,7 +11,7 @@ import { Progress } from "./ui/progress";
 import { Spinner } from "./ui/spinner";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty";
 import { CrosshairGlyph, CrosshairSwitch, GUIDE_STEP_DEGREES, GUIDE_TICKS, LineupGuide, useCrosshairStyle, type GuideAxis, type GuideGeometry } from "./lineup-crosshair";
-import { planReplay, replayObjects, type ReplayFrame, type ReplayPlan } from "../lib/throw-replay";
+import { planReplay, replayObjects, ORBIT_ZOOM, type ReplayFrame, type ReplayPlan } from "../lib/throw-replay";
 import { ReplayBar, ReplayKeys, ReplayStatus } from "./throw-replay-controls";
 
 type Phase =
@@ -24,9 +24,9 @@ type Phase =
 type Replay =
   | { status: "preparing" }
   | { status: "failed" }
-  | { status: "ready"; time: number; end: number; playing: boolean; speed: number; frame: ReplayFrame; kind: string; source: string; timed: boolean };
-type ReplayControls = { open(): void; toggle(): void; seek(time: number): void; restart(): void; speed(value: number): void; close(): void };
-const NO_REPLAY: ReplayControls = { open() {}, toggle() {}, seek() {}, restart() {}, speed() {}, close() {} };
+  | { status: "ready"; time: number; end: number; playing: boolean; speed: number; frame: ReplayFrame; kind: string; source: string; timed: boolean; orbited: boolean };
+type ReplayControls = { open(): void; toggle(): void; seek(time: number): void; restart(): void; speed(value: number): void; recenter(): void; close(): void };
+const NO_REPLAY: ReplayControls = { open() {}, toggle() {}, seek() {}, restart() {}, speed() {}, recenter() {}, close() {} };
 
 function flightSource(plan: NonNullable<ReplayPlan>) {
   if (plan.flight?.source === "recorded") return "Flugbahn im Spiel aufgezeichnet";
@@ -122,13 +122,14 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
       let frame = 0;
       // Replay of the recorded throw: inputs in first person, then the camera follows the grenade.
       let replayed: { plan: NonNullable<ReplayPlan>; objects: ReturnType<typeof replayObjects> } | null = null;
-      const playback = { active: false, playing: false, time: 0, speed: 1, last: 0 };
+      const playback = { active: false, playing: false, time: 0, speed: 1, last: 0, orbit: { yaw: 0, pitch: 0, zoom: 1 } };
+      const orbited = () => Boolean(playback.orbit.yaw || playback.orbit.pitch || playback.orbit.zoom !== 1);
       const abort = { aborted: false };
       const replayState = () => {
         if (!replayed) return;
         const { plan } = replayed;
         setReplay({ status: "ready", time: playback.time, end: plan.end, playing: playback.playing, speed: playback.speed,
-          frame: plan.frame(playback.time), kind: plan.kind, source: flightSource(plan), timed: Boolean(plan.flight) });
+          frame: plan.frame(playback.time), kind: plan.kind, source: flightSource(plan), timed: Boolean(plan.flight), orbited: orbited() });
       };
       const draw = (now = performance.now()) => {
         frame = 0;
@@ -138,7 +139,7 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
             playback.last = now;
             if (playback.time >= replayed.plan.end) playback.playing = false;
           }
-          const pose = replayed.plan.camera(playback.time);
+          const pose = replayed.plan.camera(playback.time, playback.orbit);
           if (pose) {
             view.position.set(...sourceToScene(pose.eye));
             view.lookAt(...sourceToScene(pose.target));
@@ -198,12 +199,14 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
             scene.add(replayed.objects.group);
           }
           playback.active = true;
+          Object.assign(playback.orbit, { yaw: 0, pitch: 0, zoom: 1 });
           play(0);
         },
         toggle() { if (!playback.active || !replayed) return; if (playback.playing) { playback.playing = false; render(); } else play(playback.time >= replayed.plan.end ? 0 : undefined); },
         seek(time) { if (!playback.active || !replayed) return; playback.time = THREE.MathUtils.clamp(time, 0, replayed.plan.end); render(); },
         restart() { if (playback.active) play(0); },
         speed(value) { playback.speed = value; replayState(); },
+        recenter() { Object.assign(playback.orbit, { yaw: 0, pitch: 0, zoom: 1 }); render(); },
         close() {
           playback.active = playback.playing = false;
           replayed?.objects.update(-1);
@@ -225,23 +228,51 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
       };
       const observer = new ResizeObserver(resize);
       observer.observe(stage);
-      // Dragging moves the picture with the pointer, like a photo sphere.
-      let drag: { id: number; x: number; y: number } | null = null;
+      // Dragging moves the picture with the pointer, like a photo sphere. In the replay it circles the
+      // camera around the grenade instead, and the wheel or two fingers move it closer or farther.
+      const pointers = new Map<number, { x: number; y: number }>();
+      let pinch = 0;
       const radiansPerPixel = () => THREE.MathUtils.degToRad(VERTICAL_FOV_DEGREES) / view.zoom / Math.max(1, canvas.clientHeight);
-      const down = (event: PointerEvent) => { drag = { id: event.pointerId, x: event.clientX, y: event.clientY }; canvas.setPointerCapture(event.pointerId); };
-      const move = (event: PointerEvent) => {
-        if (drag?.id !== event.pointerId || playback.active) return;
-        const scale = radiansPerPixel();
-        turn((event.clientX - drag.x) * scale, (event.clientY - drag.y) * scale);
-        drag = { ...drag, x: event.clientX, y: event.clientY };
+      const orbitZoom = (factor: number) => {
+        playback.orbit.zoom = THREE.MathUtils.clamp(playback.orbit.zoom * factor, ORBIT_ZOOM.min, ORBIT_ZOOM.max);
+        render();
       };
-      const up = (event: PointerEvent) => { if (drag?.id === event.pointerId) drag = null; };
+      const down = (event: PointerEvent) => { pointers.set(event.pointerId, { x: event.clientX, y: event.clientY }); pinch = 0; canvas.setPointerCapture(event.pointerId); };
+      const move = (event: PointerEvent) => {
+        const last = pointers.get(event.pointerId);
+        if (!last) return;
+        const dx = event.clientX - last.x, dy = event.clientY - last.y;
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (!playback.active) {
+          if (pointers.size === 1) { const scale = radiansPerPixel(); turn(dx * scale, dy * scale); }
+          return;
+        }
+        if (pointers.size >= 2) {
+          const [a, b] = [...pointers.values()], spread = Math.hypot(a.x - b.x, a.y - b.y);
+          if (pinch && spread) orbitZoom(pinch / spread);
+          pinch = spread;
+          return;
+        }
+        // A full drag across the picture turns the camera once around, as in common 3D viewers.
+        const scale = 2 * Math.PI / Math.max(1, canvas.clientHeight);
+        playback.orbit.yaw -= dx * scale;
+        playback.orbit.pitch = THREE.MathUtils.clamp(playback.orbit.pitch + dy * scale, -2.7, 2.7);
+        render();
+      };
+      const up = (event: PointerEvent) => { pointers.delete(event.pointerId); pinch = 0; };
+      const wheel = (event: WheelEvent) => {
+        if (!playback.active) return;
+        event.preventDefault();
+        orbitZoom(Math.exp(event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.0015)));
+      };
       const key = (event: KeyboardEvent) => {
         if (playback.active) {
           const seek = { ArrowLeft: -0.5, ArrowRight: 0.5 }[event.key];
           if (seek) { event.preventDefault(); replayRef.current.seek(playback.time + seek); }
           else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); replayRef.current.toggle(); }
           else if (event.key === "Escape") { event.preventDefault(); replayRef.current.close(); }
+          else if (["+", "=", "-"].includes(event.key)) { event.preventDefault(); orbitZoom(event.key === "-" ? 1.25 : 0.8); }
+          else if (event.key === "Home") { event.preventDefault(); replayRef.current.recenter(); }
           return;
         }
         const step = THREE.MathUtils.degToRad(3) / view.zoom;
@@ -267,6 +298,7 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
       canvas.addEventListener("pointermove", move);
       canvas.addEventListener("pointerup", up);
       canvas.addEventListener("pointercancel", up);
+      canvas.addEventListener("wheel", wheel, { passive: false });
       canvas.addEventListener("keydown", key);
       canvas.addEventListener("webglcontextlost", lost);
       window.addEventListener("keydown", shiftDown);
@@ -281,7 +313,7 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
         window.removeEventListener("keydown", shiftDown);
         window.removeEventListener("keyup", shiftUp);
         window.removeEventListener("blur", unzoom);
-        for (const [type, listener] of [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up], ["keydown", key], ["webglcontextlost", lost]] as const)
+        for (const [type, listener] of [["pointerdown", down], ["pointermove", move], ["pointerup", up], ["pointercancel", up], ["wheel", wheel], ["keydown", key], ["webglcontextlost", lost]] as const)
           canvas.removeEventListener(type, listener as EventListener);
         mounted.dispose();
         resetRef.current = () => {};
@@ -303,7 +335,8 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
   return <div className="lineup-pov">
     <div ref={stageRef} className="lineup-pov-stage" aria-busy={phase.kind === "manifest" || phase.kind === "loading" || undefined}>
       <canvas ref={canvasRef} className="lineup-pov-canvas" hidden={!ready} tabIndex={ready ? 0 : -1} role="img"
-        aria-label={`Abwurfsicht auf ${mapLabel}. Pfeiltasten zum Umsehen, Shift halten zum Zoomen, Pos1 für die Wurfrichtung.`} />
+        aria-label={replaying ? `Wurfwiedergabe auf ${mapLabel}. Ziehen dreht die Kamera um die Granate, Mausrad oder Plus und Minus zoomen, Pos1 setzt die Kamera zurück, Pfeiltasten spulen.`
+          : `Abwurfsicht auf ${mapLabel}. Pfeiltasten zum Umsehen, Shift halten zum Zoomen, Pos1 für die Wurfrichtung.`} />
       {ready && !replaying && guide && <div className="lineup-guide" aria-hidden="true"><LineupGuide geometry={guide} unit={unit} /></div>}
       {ready && <div ref={crosshairRef} className="lineup-pov-crosshair" aria-hidden="true" hidden={Boolean(replaying)}><CrosshairGlyph style={crosshair} unit={unit} /></div>}
       {ready && !replaying && <CrosshairSwitch value={crosshair} onChange={setCrosshair} />}
@@ -324,7 +357,8 @@ export default function LineupPov({ nade: entry, mapName, mapLabel }: { nade: an
     {ready && replaying && <div className="lineup-pov-caption">
       <ReplayBar time={replaying.time} end={replaying.end} playing={replaying.playing} speed={replaying.speed}
         onToggle={() => replayRef.current.toggle()} onSeek={time => replayRef.current.seek(time)} onRestart={() => replayRef.current.restart()}
-        onSpeed={value => replayRef.current.speed(value)} onClose={() => replayRef.current.close()} />
+        onSpeed={value => replayRef.current.speed(value)} onClose={() => replayRef.current.close()}
+        orbited={replaying.orbited} onRecenter={() => replayRef.current.recenter()} />
     </div>}
     {ready && !replaying && <div className="lineup-pov-caption">
       <p className="text-xs text-muted-foreground" role={replay?.status === "failed" ? "alert" : undefined}>

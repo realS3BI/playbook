@@ -6,6 +6,10 @@ Admin, Match Admin und die Rolle **Trainingsspieler** öffnen es im eigenständi
 
 Das bestehende Workshop-Item ist **3810441722**. Auf Windows im Projekt-Root [hud.cmd](../hud.cmd) doppelklicken: Das Skript lädt den aktuellen Git-Stand, baut und installiert das lokale Panorama-Panel, testet und baut die Electron-App und öffnet anschließend die frisch gebaute Playbook-Version. Der Standardaufruf benötigt keinen Installer und keine Workshop-Rückfrage. Ein Workshop-Release erfolgt separat mit `hud.cmd -Mode release`. Einrichtung und Workshop Manager als Alternative sind in der [Veröffentlichungsanleitung](workshop-release.md) beschrieben. Rollen und Panel-Funktionen kommen aus dem Server-Plugin; ein Workshop-Upload allein aktualisiert diese nicht.
 
+## Aktuelle Anzeige
+
+Neun feste Listenplätze ohne Zeilennummern und ohne Mengenzähler rechts. Seitenpunkte beziehungsweise bei mehr als fünf Seiten die Seitenzahl stehen ausschließlich in der Navigation. Über der Beschreibung erscheinen nur fachliche Statusangaben, keine erneute Anzahl der Einträge oder Seiten. Tasten-Chips, Seitenangaben wie CT/T und Review-Status bleiben sichtbar.
+
 ## Aufbau ab Plugin 1.8.0
 
 Mittige Überschrift, engere Breadcrumb und neun feste Listenplätze, Zurück/Seitenwechsel/Seitenzahl/Home sowie drei Beschreibungszeilen. Footer-Hinweise und Modusindikator sind entfernt. Die Bibliothek und Zustände werden alle zwei Sekunden aktualisiert. Die ausgewählte Granate bleibt bei Änderungen möglichst erhalten. Das Panel ist im eigenständigen Nades-Training und im tatsächlichen MatchZy-Practice-Modus verfügbar.

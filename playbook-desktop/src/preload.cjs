@@ -10,7 +10,8 @@ async function invoke(channel, ...args) {
 
 // Expose individual operations only. Never expose ipcRenderer, console commands,
 // arbitrary filesystem access, URLs, or screen/window IDs to the remote website.
-if (location.origin === 'https://playbook.schlossers.at' && window === window.top) {
+const trustedOrigin = process.argv.find(argument => argument.startsWith('--playbook-origin='))?.slice('--playbook-origin='.length);
+if (trustedOrigin && location.origin === trustedOrigin && window === window.top) {
   contextBridge.exposeInMainWorld('playbookDesktop', Object.freeze({
     version: 1,
     status: () => invoke('review:status'),

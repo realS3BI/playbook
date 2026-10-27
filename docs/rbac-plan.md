@@ -12,7 +12,7 @@ Zusätzlich gelten bereits Regeln pro Aufnahme. Ein Ersteller darf nur seine noc
 
 ## Ein Benutzer mit Rollen in mehreren Bereichen
 
-Ein Rollenname beschreibt eine Aufgabe in der Verwaltung. Die Zuweisung ergänzt, wo die Rolle gilt. Beispielsweise ist Sebastian Trainingsspieler auf dem bestehenden Server, Owner in Team A und Mitglied in Team B. Owner in Team A erlaubt keine Änderungen an Team B oder am Gameserver.
+Ein Rollenname beschreibt eine Aufgabe in der Verwaltung. Die Zuweisung ergänzt, wo die Rolle gilt. Beispielsweise ist ein Benutzer Trainingsspieler auf dem bestehenden Server, Owner in Team A und Mitglied in Team B. Owner in Team A erlaubt keine Änderungen an Team B oder am Gameserver.
 
 | Geltungsbereich | Rolle | Geplante Befugnisse |
 | --- | --- | --- |

@@ -1,6 +1,6 @@
 # Trainingspanel lokal testen und im Steam Workshop veröffentlichen
 
-Dieses Projekt aktualisiert das bestehende [Workshop-Item 3810441722](https://steamcommunity.com/sharedfiles/filedetails/?id=3810441722). Entwicklung, Dashboard und Server können auf dem Mac mini bleiben. Für das Kompilieren mit Valves Windows-Werkzeugen, den Spieltest und den Upload verwendest du deine Windows-Arbeitskopie. Git verbindet beide Rechner; ein GitHub-Actions-Runner oder GitHub-Secrets sind für diesen Ablauf nicht erforderlich.
+Dieses Projekt aktualisiert das bestehende [Workshop-Item 3810441722](https://steamcommunity.com/sharedfiles/filedetails/?id=3810441722). Entwicklung, Dashboard und Server können auf einem separaten Rechner laufen. Für das Kompilieren mit Valves Windows-Werkzeugen, den Spieltest und den Upload verwendest du deine Windows-Arbeitskopie. Git verbindet beide Rechner; ein GitHub-Actions-Runner oder GitHub-Secrets sind für diesen Ablauf nicht erforderlich.
 
 HUD-Dateien und Server-Plugin werden getrennt aktualisiert. Das Skript veröffentlicht Layout und Styles im Workshop. Änderungen an Menüs, Rollen, Favoriten und Trainingsaktionen erfordern zusätzlich ein aktuelles CS2-Image mit dem Plugin und gegebenenfalls ein neues Dashboard-Image. In Coolify aus dem passenden Commit bauen und bereitstellen, dann Einstellungen mit **Apply & restart** übernehmen.
 

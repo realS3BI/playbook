@@ -7,7 +7,8 @@ test('native errors reach the review without Electron IPC internals', async () =
   let bridge;
   const window = {}; window.top = window;
   const context = {
-    window, location: { origin: 'https://playbook.schlossers.at' },
+    window, location: { origin: 'https://playbook.example.com' },
+    process: { argv: ['--playbook-origin=https://playbook.example.com'] },
     require: () => ({
       contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
       ipcRenderer: { invoke: async () => { throw new Error("Error invoking remote method 'review:connect': Error: CS2 ist nicht erreichbar."); } },

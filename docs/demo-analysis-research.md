@@ -1,6 +1,6 @@
 # Recherche zur CS2-Demoanalyse
 
-Stand: 5. Oktober 2026. Recherchiert wurden die offiziellen Produktdokumentationen, die FACEIT-API-Spezifikation, Valves Dokumentation zum Matchzugang und die genannten Open-Source-Repositories. Es wurden keine Accounts verbunden, Downloads-API-Zugänge beantragt oder Demos geparst. Produktangaben sind als dokumentierte Fähigkeiten zu verstehen; ein Test der angemeldeten Anwendungen steht aus. Sebastian hat eigene FACEIT- und CS2-Premier-/Matchmaking-Matches als ersten Schwerpunkt gewählt. Der Captain soll den gemeinsamen Review führen; die im Projekt ergänzten WebSockets sind dafür vorgesehen. Der [Produktentwurf](demo-analysis-plan.md) beschreibt diesen Ablauf.
+Stand: 5. Oktober 2026. Recherchiert wurden die offiziellen Produktdokumentationen, die FACEIT-API-Spezifikation, Valves Dokumentation zum Matchzugang und die genannten Open-Source-Repositories. Es wurden keine Accounts verbunden, Downloads-API-Zugänge beantragt oder Demos geparst. Produktangaben sind als dokumentierte Fähigkeiten zu verstehen; ein Test der angemeldeten Anwendungen steht aus. Der erste Schwerpunkt sind eigene FACEIT- und CS2-Premier-/Matchmaking-Matches. Der Captain soll den gemeinsamen Review führen; die im Projekt ergänzten WebSockets sind dafür vorgesehen. Der [Produktentwurf](demo-analysis-plan.md) beschreibt diesen Ablauf.
 
 ## Einschätzung
 

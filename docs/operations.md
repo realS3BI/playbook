@@ -18,10 +18,10 @@ MongoDB, API und Demo-Worker laufen in Docker, Vite direkt auf dem Rechner. Im T
 
 Die Website ist unter `http://localhost:5173` erreichbar. Vite lädt Frontend-Änderungen direkt nach. API und Demo-Worker erhalten `src`, `shared` und die TypeScript-Konfiguration als Bind-Mount; `tsc --watch` übersetzt Änderungen, `node --watch` startet den Prozess in etwa einer Sekunde neu. Typfehler erscheinen im Bereich `api` bzw. `worker`. Nach Änderungen an `admin-panel/package.json` oder der Lockfile die Umgebung neu starten, damit das Dev-Image die Pakete neu installiert. Strg+C beendet die Container. Datenbank, Uploads und Runtime-Dateien bleiben in eigenen Volumes des Compose-Projekts `playbook-dev` erhalten.
 
-Für den Zugriff über eine LAN- oder Tailscale-Adresse die tatsächliche Browser-Adresse angeben:
+Für den Zugriff über eine LAN-Adresse die tatsächliche Browser-Adresse angeben:
 
 ```bash
-./dev.sh --url http://100.109.17.79:5173
+./dev.sh --url http://DEINE_LAN_ADRESSE:5173
 ```
 
 Beim ersten Start legt das Skript `.env.development` mit dieser Adresse und einem zufälligen Session-Secret an. Die Datei wird von Git ignoriert. Für Admin-Rechte die eigene 17-stellige Steam64-ID in `ADMIN_PANEL_ADMIN_STEAM_ID` eintragen und die Entwicklungsumgebung neu starten. Alternativ beim Start `--admin DEINE_STEAM64_ID` übergeben. Die konfigurierte Steam-ID erhält in der Entwicklungsumgebung auch bei einem bestehenden Player-Konto Admin-Rechte. Name, Favoriten und andere Benutzer bleiben erhalten. Im Deployment bleibt die Variable auf das Anlegen eines neuen Admin-Kontos beschränkt.
@@ -86,7 +86,7 @@ docker compose up -d --build
 
 ### Testzugang als Spieler
 
-Unter `https://playbook.schlossers.at/login/test` kannst du dich mit Benutzername und Passwort als zusätzlicher Spieler anmelden. Der Zugang zeigt die Plattform ohne Admin-Rechte und speichert eigene Favoriten. Auch wenn du bereits als Admin angemeldet bist, kannst du über diese Seite zum Testkonto wechseln. Zurück zum Admin-Konto kommst du über Abmelden und die Steam-Anmeldung.
+Unter `https://playbook.example.com/login/test` kannst du dich mit Benutzername und Passwort als zusätzlicher Spieler anmelden. Der Zugang zeigt die Plattform ohne Admin-Rechte und speichert eigene Favoriten. Auch wenn du bereits als Admin angemeldet bist, kannst du über diese Seite zum Testkonto wechseln. Zurück zum Admin-Konto kommst du über Abmelden und die Steam-Anmeldung.
 
 Setze dafür in Coolify oder in der Compose-Umgebung:
 

@@ -48,35 +48,35 @@ public sealed class PanelPresentationTests
     }
 
     [Fact]
-    public void HomeAndCategoriesMoveCountsIntoMeta()
+    public void HomeAndCategoriesHaveNoCountMetadata()
     {
         var menu = TrainingMenu.Create([Lineup("a"), Lineup("b", NadeKind.Flash)], "de_mirage", true, null);
         var home = menu.Current.Items;
         Assert.Equal("Granaten-Bibliothek", home[0].Label);
-        Assert.Equal("2", home[0].Meta);
+        Assert.Empty(home[0].Meta);
         Assert.Equal("Must Know", home[1].Label);
-        Assert.Equal("0", home[1].Meta);
+        Assert.Empty(home[1].Meta);
         Assert.Equal("Reviews", home[7].Label);
-        Assert.Equal("0", home[7].Meta);
+        Assert.Empty(home[7].Meta);
         menu.Select(1);
         var categories = menu.Current.Items;
         Assert.Equal("Smokes", categories[0].Label);
-        Assert.Equal("1", categories[0].Meta);
+        Assert.Empty(categories[0].Meta);
         Assert.Equal(NadeKind.Smoke, categories[0].Kind);
         Assert.Equal(NadeKind.Flash, categories.Single(item => item.Label == "Flashes").Kind);
         Assert.DoesNotContain(categories, item => item.Label.Contains('('));
     }
 
     [Fact]
-    public void StatusFallsBackToListPositionAndAvailability()
+    public void StatusOnlyShowsContextAndAvailability()
     {
         var items = Enumerable.Range(1, 12).Select(i => new MenuItem($"Eintrag {i}", Enabled: i != 2)).ToArray();
         var menu = new InGameMenu(new("Liste", "", items), "de_mirage");
-        Assert.Equal("12 Einträge · Seite 1/2", menu.Status);
+        Assert.Empty(menu.Status);
         menu.Move(1);
         Assert.Equal("Nicht verfügbar", menu.Status);
         var single = new InGameMenu(new("Liste", "", [new MenuItem("Allein")]), "de_mirage");
-        Assert.Equal("1 Eintrag", single.Status);
+        Assert.Empty(single.Status);
     }
 
     [Theory]
@@ -134,7 +134,7 @@ public sealed class PanelPresentationTests
         var menu = TrainingMenu.Create(library, "de_mirage", true, null, settings: settings);
         menu.Select(3); // Trainingswerkzeuge
         var recent = menu.Current.Items.Single(item => item.Label == "Zuletzt trainiert");
-        Assert.Equal("5", recent.Meta);
+        Assert.Empty(recent.Meta);
         Assert.Equal(new[] { "nade-3", "nade-7", "nade-6", "nade-5", "nade-4" }, recent.Page!.Items.Select(item => item.Label));
 
         var stale = PlayerPanelSettings.Validate(settings with { Recent = [new("", "de_mirage", "x"), settings.Recent[0], settings.Recent[0]] });

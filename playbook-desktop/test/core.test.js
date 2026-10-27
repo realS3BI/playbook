@@ -171,8 +171,8 @@ test('failed restoration releases capture lock but retains journal for automatic
   assert.deepEqual(f.state(), f.original);
 });
 test('only the exact HTTPS Playbook origin gets native access; Steam can navigate for login', () => {
-  assert.ok(trusted('https://playbook.schlossers.at/maps/anubis'));
-  for (const url of ['http://playbook.schlossers.at', 'https://playbook.schlossers.at.evil.test', 'https://user@playbook.schlossers.at', 'file:///tmp/a', 'https://steamcommunity.com']) assert.equal(trusted(url), false);
+  assert.ok(trusted('https://playbook.example.com/maps/anubis'));
+  for (const url of ['http://playbook.example.com', 'https://playbook.example.com.evil.test', 'https://user@playbook.example.com', 'file:///tmp/a', 'https://steamcommunity.com']) assert.equal(trusted(url), false);
   assert.ok(loginNavigation('https://steamcommunity.com/openid/login'));
   assert.equal(loginNavigation('https://steamcommunity.com.evil.test'), false);
 });

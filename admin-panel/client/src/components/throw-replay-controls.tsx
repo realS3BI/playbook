@@ -1,4 +1,4 @@
-import { Pause, Play, RotateCcw, X } from "lucide-react";
+import { Focus, Pause, Play, RotateCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { TIMELINE_LANES } from "../../../shared/throw-motion";
 import type { ReplayFrame, ReplayPhase } from "../lib/throw-replay";
@@ -21,6 +21,7 @@ export function ReplayStatus({ frame, kind, source, timed, measured }: { frame: 
   return <div className="throw-replay-status">
     <p><strong>{label}</strong>{detail && <span className="tabular-nums">{detail}</span>}</p>
     <p className="throw-replay-source">{source}</p>
+    {after && <p className="throw-replay-source">Ziehen dreht die Kamera um die Granate, Mausrad zoomt.</p>}
   </div>;
 }
 
@@ -31,9 +32,9 @@ export function ReplayKeys({ buttons }: { buttons: Set<string> }) {
   </div>;
 }
 
-export function ReplayBar({ time, end, playing, speed, onToggle, onSeek, onRestart, onSpeed, onClose }: {
-  time: number; end: number; playing: boolean; speed: number;
-  onToggle(): void; onSeek(time: number): void; onRestart(): void; onSpeed(speed: number): void; onClose(): void;
+export function ReplayBar({ time, end, playing, speed, orbited, onToggle, onSeek, onRestart, onSpeed, onRecenter, onClose }: {
+  time: number; end: number; playing: boolean; speed: number; orbited: boolean;
+  onToggle(): void; onSeek(time: number): void; onRestart(): void; onSpeed(speed: number): void; onRecenter(): void; onClose(): void;
 }) {
   const finished = time >= end - 0.02;
   return <div className="throw-replay-bar">
@@ -47,6 +48,7 @@ export function ReplayBar({ time, end, playing, speed, onToggle, onSeek, onResta
       {REPLAY_SPEEDS.map(value => <button key={value} type="button" aria-pressed={speed === value} onClick={() => onSpeed(value)}>
         {value === 1 ? "1×" : value === 0.5 ? "½×" : "¼×"}</button>)}
     </div>
+    <Button size="icon" variant="ghost" disabled={!orbited} onClick={onRecenter} aria-label="Kamera zurücksetzen" title="Kamera zurücksetzen (Pos1)" aria-keyshortcuts="Home"><Focus /></Button>
     <Button size="sm" variant="ghost" onClick={onClose} aria-keyshortcuts="Escape"><X data-icon="inline-start" />Beenden</Button>
   </div>;
 }

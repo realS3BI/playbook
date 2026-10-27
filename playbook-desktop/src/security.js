@@ -1,4 +1,8 @@
-export const ORIGIN = 'https://playbook.schlossers.at';
+const website = new URL(process.env.PLAYBOOK_DESKTOP_URL || 'https://playbook.example.com');
+if (website.protocol !== 'https:' || website.username || website.password || website.pathname !== '/' || website.search || website.hash) {
+  throw new Error('PLAYBOOK_DESKTOP_URL muss eine HTTPS-Adresse ohne Pfad oder Zugangsdaten sein.');
+}
+export const ORIGIN = website.origin;
 export function trusted(url) {
   try { const parsed = new URL(url); return parsed.origin === ORIGIN && !parsed.username && !parsed.password; }
   catch { return false; }

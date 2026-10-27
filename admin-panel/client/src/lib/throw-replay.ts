@@ -11,6 +11,11 @@ import { directFlight, flightCorridor, flightPosition, grenadeRelease, recordedF
 type Sample = ReturnType<typeof parseThrowTrace>[number];
 export type ReplayPhase = "lineup" | "movement" | "release" | "flight" | "effect";
 export type ReplayFrame = { phase: ReplayPhase; buttons: Set<string>; fromRelease: number; flying: boolean };
+// Turned and zoomed by the viewer around whatever the camera follows; yaw and pitch in radians.
+export type ReplayOrbit = { yaw: number; pitch: number; zoom: number };
+export const ORBIT_ZOOM = { min: 0.2, max: 4 };
+// Farther out the camera would leave the traced corridor and could end up behind walls.
+const ORBIT_REACH = 480;
 
 const GRENADE_RADIUS = 2;
 const LEAD = 0.6;
@@ -215,6 +220,18 @@ export async function planReplay(nade: Record<string, any>, root: THREE.Object3D
   }
   const blend = (a: { eye: Vector3; target: Vector3 }, b: { eye: Vector3; target: Vector3 }, share: number) =>
     ({ eye: lerp(a.eye, b.eye, smooth(share)), target: lerp(a.target, b.target, smooth(share)) });
+  // The viewer's turn and zoom on top of the automatic camera, always centred on its target.
+  function orbitAround(pose: { eye: Vector3; target: Vector3 }, orbit: ReplayOrbit, weight: number) {
+    if (weight <= 0 || !orbit.yaw && !orbit.pitch && orbit.zoom === 1) return pose;
+    const { eye, target } = pose;
+    const offset: Vector3 = [eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]];
+    const length = Math.max(Math.hypot(...offset), 1);
+    const yaw = Math.atan2(offset[1], offset[0]) + orbit.yaw * weight;
+    const pitch = THREE.MathUtils.clamp(Math.asin(offset[2] / length) + orbit.pitch * weight, -1.2, 1.5);
+    const distance = THREE.MathUtils.clamp(length * orbit.zoom ** weight, 24, Math.max(length, ORBIT_REACH));
+    const wanted: Vector3 = [target[0] + Math.cos(pitch) * Math.cos(yaw) * distance, target[1] + Math.cos(pitch) * Math.sin(yaw) * distance, target[2] + Math.sin(pitch) * distance];
+    return { eye: clear(target, wanted), target };
+  }
 
   const movementAt = motion?.movement ? samples[motion.movement.startIndex].time - traceStart : null;
   const letGoAt = motion ? samples[motion.release.index].time - traceStart : null;
@@ -227,15 +244,17 @@ export async function planReplay(nade: Record<string, any>, root: THREE.Object3D
         : letGoAt !== null && time >= letGoAt - 0.05 ? "release" : movementAt !== null && time >= movementAt ? "movement" : "lineup";
       return { phase, buttons: time < releaseAt ? pose?.buttons ?? new Set() : new Set(), fromRelease: Math.min(time, center ? pop : time) - (letGoAt ?? releaseAt), flying: time >= releaseAt && time < pop };
     },
-    camera(time: number) {
+    // The orbit fades in while the camera leaves the thrower's eyes; in first person there is nothing to circle.
+    camera(time: number, orbit?: ReplayOrbit) {
       const own = firstPerson(time);
       if (!own) return null;
       const start = look(own);
       if (time < releaseAt || !center) return start;
       const flown = time - releaseAt;
-      if (!flight) return blend(start, overview(0), flown / MISSING_FLIGHT);
-      if (time < pop) return flown < BLEND ? blend(start, chase(flown), flown / BLEND) : chase(flown);
-      return blend(chase(flightEnd), overview(time - pop), (time - pop) / 1.4);
+      const turned = (pose: { eye: Vector3; target: Vector3 }, span: number) => orbit ? orbitAround(pose, orbit, smooth(flown / span)) : pose;
+      if (!flight) return turned(blend(start, overview(0), flown / MISSING_FLIGHT), MISSING_FLIGHT);
+      if (time < pop) return turned(flown < BLEND ? blend(start, chase(flown), flown / BLEND) : chase(flown), BLEND);
+      return turned(blend(chase(flightEnd), overview(time - pop), (time - pop) / 1.4), BLEND);
     },
     grenade(time: number): Vector3 | null {
       return flight && time >= releaseAt && time < pop ? flightPosition(flight.points, time - releaseAt) : null;

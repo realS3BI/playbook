@@ -59,7 +59,6 @@ Label { font-family: "Stratum2", "IBM Plex Sans", Arial; font-size: 15px; color:
     transition-property: background-color, border-color; transition-duration: 0.12s;
 }
 .row Label { vertical-align: center; }
-.row .num { width: 14px; font-family: "IBM Plex Mono", "Stratum2 Mono", monospace; font-size: 11px; color: #a3b3c3; }
 /* Grenade icons from the game's own equipment set, tinted in radar ink (D1) */
 .row .kind { width: 16px; height: 16px; margin: 0px 8px 0px 0px; vertical-align: center; background-size: contain; background-repeat: no-repeat; background-position: center; }
 .row.kind-smoke .kind { background-image: url("s2r://panorama/images/icons/equipment/smokegrenade.vsvg_c"); wash-color: #9fb3c4; }
@@ -86,7 +85,7 @@ Label { font-family: "Stratum2", "IBM Plex Sans", Arial; font-size: 15px; color:
 .row.danger .name { color: #f6747e; }
 .row.danger.selected { border-left-color: #f6747e; background-color: #f6747e2e; }
 .row.empty { border-bottom: 1px solid #3342534d; border-radius: 0px; }
-.row.empty .num, .row.empty .kind { opacity: 0; }
+.row.empty .kind { opacity: 0; }
 .editing .row.empty:hover { background-color: transparent; }
 
 /* Radar ink: one colour per side and state */
@@ -119,6 +118,7 @@ Label { font-family: "Stratum2", "IBM Plex Sans", Arial; font-size: 15px; color:
 /* Status line (A8), capture progress (D4), description with a notice tone (A7) */
 .details { width: 100%; flow-children: down; border-top: 1px solid #2a3a49; margin-top: 10px; padding-top: 8px; }
 .status { width: 100%; height: 16px; font-family: "IBM Plex Mono", "Stratum2 Mono", monospace; font-size: 11px; letter-spacing: 0.5px; color: #a3b3c3; white-space: nowrap; text-overflow: ellipsis; margin-bottom: 4px; }
+.status.empty { visibility: collapse; }
 .progress { width: 100%; height: 3px; margin-bottom: 6px; border-radius: 2px; background-color: #1b2a37; visibility: collapse; }
 .progress.active { visibility: visible; }
 .progress-fill { width: 0%; height: 100%; border-radius: 2px; background-color: #80cabc; transition-property: width; transition-duration: 0.25s; transition-timing-function: linear; }

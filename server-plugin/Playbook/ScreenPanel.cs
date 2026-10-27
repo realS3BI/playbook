@@ -111,7 +111,9 @@ internal sealed class ScreenPanel(CCSPlayerController player) : IDisposable
         }
         // Status line (A8), capture countdown with progress bar (D4), description with a notice tone (A7).
         var capturing = captureSecondsLeft is { } left && left > 0;
-        Text("training_status", capturing ? $"Aufnahme läuft · {Countdown(captureSecondsLeft!.Value)} · eine Granate werfen" : menu.Status);
+        var status = capturing ? $"Aufnahme läuft · {Countdown(captureSecondsLeft!.Value)} · eine Granate werfen" : menu.Status;
+        Text("training_status", status);
+        Class("training_status", "empty", status.Length == 0);
         Class("training_progress", "active", capturing);
         var step = capturing ? ProgressStep(captureSecondsLeft!.Value) : 0;
         for (var i = 0; i <= ProgressSteps; i++) Class("training_progress_fill", $"p-{i}", capturing && i == step);

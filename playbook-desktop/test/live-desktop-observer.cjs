@@ -12,7 +12,7 @@ app.setPath('userData', path.join(__dirname, 'user-data'));
 app.whenReady().then(() => session.defaultSession.protocol.handle('https', () => new Response('<!doctype html><title>Playbook CS2-Live-Test</title><p>Lokaler Aufnahmetest</p>')));
 let testing = false;
 app.on('browser-window-created', (_event, window) => window.webContents.on('did-finish-load', async () => {
-  if (testing || !window.webContents.getURL().startsWith('https://playbook.schlossers.at/')) return;
+  if (testing || new URL(window.webContents.getURL()).origin !== new URL(process.env.PLAYBOOK_DESKTOP_URL || 'https://playbook.example.com').origin) return;
   testing = true;
   let consoleConnection;
   const invoke = async source => {

@@ -1,6 +1,12 @@
 # Playbook für Windows
 
-Die App enthält die vollständige Website unter `https://playbook.schlossers.at` und ergänzt den Medien-Review um lokale CS2-Steuerung. Website-Updates erscheinen ohne Neuinstallation. Neue Windows-Versionen werden im Hintergrund geladen; installiert wird erst über den Update-Button nach dem Review.
+Die App öffnet die über `PLAYBOOK_DESKTOP_URL` konfigurierte Playbook-Website und ergänzt den Medien-Review um lokale CS2-Steuerung. Website-Updates erscheinen ohne Neuinstallation. Neue Windows-Versionen werden im Hintergrund geladen; installiert wird erst über den Update-Button nach dem Review.
+
+Die Vorgabe `https://playbook.example.com` ist ein Platzhalter. Vor dem Start `PLAYBOOK_DESKTOP_URL` auf die eigene HTTPS-Adresse ohne Pfad setzen. Die Adresse gilt auch für die Freigabe der lokalen Desktop-Funktionen.
+
+```powershell
+$env:PLAYBOOK_DESKTOP_URL = "https://playbook.example.com"
+```
 
 ## Benutzen
 
